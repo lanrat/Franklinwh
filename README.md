@@ -32,15 +32,21 @@ Credentials come from flags or environment variables:
 |---|---|---|
 | `FRANKLINWH_EMAIL` | `-email` | account email |
 | `FRANKLINWH_PASSWORD` | `-password` | account password (prompted if unset) |
-| `FRANKLINWH_TOKEN` | `-token` | saved login token (skips login) |
+| `FRANKLINWH_TOKEN` | `-token` | login token to use instead of the saved session |
 | `FRANKLINWH_GATEWAY` | `-gateway` | gateway ID (defaults to the first) |
+| `FRANKLINWH_SESSION` | `-session` | session file (default `~/.config/franklinwh/session.json`; `-session=` disables) |
+
+After a successful login the CLI saves the token, email and a stable client ID
+to the session file (mode `0600`). Later runs reuse it, so you only enter the
+password (and MFA code) again when the token expires; the CLI then logs in
+again automatically.
 
 ```sh
-# Log in once and print a reusable token (handles MFA interactively)
-export FRANKLINWH_EMAIL=you@example.com
-franklinwh login
-# -> prints a token; save it:
-export FRANKLINWH_TOKEN=<that token>
+# Log in once (handles MFA interactively); the session is saved
+franklinwh -email you@example.com login
+
+# Forget the saved session
+franklinwh logout
 
 # List your gateways
 franklinwh gateways
@@ -69,8 +75,8 @@ franklinwh raw              # the complete getDeviceCompositeInfo payload
 ```
 
 If your account uses multi-factor auth, `franklinwh login` sends/validates the
-code and `-token` lets you skip MFA on later runs (the client presents a stable
-device ID and sets "remember this device").
+code. The saved session then skips MFA on later runs, and because the client
+ID is saved too, the server's "remember this device" applies on re-login.
 
 ## Library usage
 

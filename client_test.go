@@ -2,11 +2,11 @@ package franklinwh
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 )
@@ -160,7 +160,7 @@ func TestUnauthorized(t *testing.T) {
 }
 
 func TestLoginFlow(t *testing.T) {
-	var gotBody map[string]any
+	var gotBody url.Values
 	c, _ := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		if !strings.HasSuffix(r.URL.Path, "/appUserOrInstallerLogin") {
 			t.Errorf("unexpected path %q", r.URL.Path)
@@ -168,8 +168,11 @@ func TestLoginFlow(t *testing.T) {
 		if r.Header.Get("client-id") != "fixed-id" {
 			t.Errorf("client-id = %q", r.Header.Get("client-id"))
 		}
-		body, _ := io.ReadAll(r.Body)
-		json.Unmarshal(body, &gotBody)
+		if ct := r.Header.Get("Content-Type"); ct != "application/x-www-form-urlencoded" {
+			t.Errorf("Content-Type = %q, want form encoding", ct)
+		}
+		r.ParseForm()
+		gotBody = r.PostForm
 		io.WriteString(w, `{"code":200,"success":true,"result":{"token":"new-token","userId":1205,"loginName":"demo"}}`)
 	})
 	// start with no token
@@ -184,14 +187,15 @@ func TestLoginFlow(t *testing.T) {
 	if c.Token() != "new-token" {
 		t.Errorf("client token not updated: %q", c.Token())
 	}
-	if gotBody["account"] != "demo@example.com" {
-		t.Errorf("account = %v", gotBody["account"])
+	if gotBody.Get("account") != "demo@example.com" {
+		t.Errorf("account = %v", gotBody.Get("account"))
 	}
-	if gotBody["enc"] != "1" {
-		t.Errorf("enc = %v, want \"1\"", gotBody["enc"])
+	if gotBody.Has("enc") {
+		t.Errorf("enc = %q, want unset", gotBody.Get("enc"))
 	}
-	if pw, _ := gotBody["password"].(string); !strings.Contains(pw, ":") {
-		t.Errorf("password not encrypted: %v", gotBody["password"])
+	// lowercase hex MD5 of "pw"
+	if pw := gotBody.Get("password"); pw != "8fe4c11451281c094a6578e6ddbf5eed" {
+		t.Errorf("password = %q, want MD5 hex", pw)
 	}
 }
 

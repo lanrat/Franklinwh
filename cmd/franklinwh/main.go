@@ -7,14 +7,23 @@
 //	FRANKLINWH_EMAIL, FRANKLINWH_PASSWORD   login credentials
 //	FRANKLINWH_TOKEN                        a saved login token (skips login)
 //	FRANKLINWH_GATEWAY                      default gateway ID
+//	FRANKLINWH_SESSION                      session file path
+//
+// After a successful login the token, client ID and email are saved to a
+// session file (by default in the user config directory) and reused by later
+// runs, so the password and MFA code are only needed again when the token
+// expires.
 //
 // Examples:
 //
-//	franklinwh login                 # log in, print a token to reuse
+//	franklinwh login                 # log in and save the session
+//	franklinwh logout                # log out and delete the saved session
 //	franklinwh gateways              # list gateways
 //	franklinwh status                # battery/grid/solar summary
 //	franklinwh status -json          # same, as JSON
 //	franklinwh raw                   # full getDeviceCompositeInfo JSON
+//	franklinwh grid                  # show grid import/export limits
+//	franklinwh grid -import 5 -export 3   # set them (kW)
 package main
 
 import (
@@ -25,6 +34,8 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -47,15 +58,20 @@ Usage:
   franklinwh [global flags] <command> [flags]
 
 Commands:
-  login       Authenticate and print a reusable token
+  login       Log in (always prompts), save the session and print the token
+  logout      Invalidate the saved token and delete the session file
   gateways    List the gateways on the account
   status      Print battery, grid and solar status (default)
   raw         Print the full device telemetry JSON
+  grid        Show grid import/export limits; set them with
+              grid [-import kW] [-export kW] [-dry-run]
 
 Global flags:
   -email string      account email (or FRANKLINWH_EMAIL)
   -password string   account password (or FRANKLINWH_PASSWORD; prompts if unset)
-  -token string      saved login token (or FRANKLINWH_TOKEN)
+  -token string      login token to use instead of the session (or FRANKLINWH_TOKEN)
+  -session string    session file (or FRANKLINWH_SESSION; default
+                     $XDG_CONFIG_HOME/franklinwh/session.json); "-session=" disables it
   -gateway string    gateway ID (or FRANKLINWH_GATEWAY; defaults to the first)
   -json              output JSON where supported
   -timeout duration  overall timeout (default 45s)
@@ -72,6 +88,7 @@ func run(args []string) error {
 		password = fs.String("password", os.Getenv("FRANKLINWH_PASSWORD"), "account password")
 		token    = fs.String("token", os.Getenv("FRANKLINWH_TOKEN"), "saved login token")
 		gateway  = fs.String("gateway", os.Getenv("FRANKLINWH_GATEWAY"), "gateway ID")
+		session  = fs.String("session", envOr("FRANKLINWH_SESSION", defaultSessionPath()), "session file (empty disables)")
 		baseURL  = fs.String("base-url", os.Getenv("FRANKLINWH_BASE_URL"), "API base URL (advanced; defaults to the production endpoint)")
 		asJSON   = fs.Bool("json", false, "output JSON where supported")
 		timeout  = fs.Duration("timeout", 45*time.Second, "overall timeout")
@@ -89,41 +106,171 @@ func run(args []string) error {
 	ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	opts := []franklinwh.Option{}
-	if *token != "" {
-		opts = append(opts, franklinwh.WithToken(*token))
+	sess := loadSession(*session)
+	if *email == "" {
+		*email = sess.Email
 	}
+	if sess.ClientID == "" {
+		// A stable client ID lets MFA's "remember this device" take effect.
+		sess.ClientID = franklinwh.NewClientID()
+	}
+
+	opts := []franklinwh.Option{franklinwh.WithClientID(sess.ClientID)}
 	if *baseURL != "" {
 		opts = append(opts, franklinwh.WithBaseURL(*baseURL))
 	}
+	// Prefer an explicit token; otherwise reuse the saved one if it belongs
+	// to the requested account.
+	fromSession := false
+	switch {
+	case *token != "":
+		opts = append(opts, franklinwh.WithToken(*token))
+	case sess.Token != "" && strings.EqualFold(sess.Email, *email) && cmd != "login":
+		opts = append(opts, franklinwh.WithToken(sess.Token))
+		fromSession = true
+	}
 	c := franklinwh.NewClient(opts...)
 
-	// Ensure we are authenticated for every command except a pure token login.
-	if c.Token() == "" {
+	login := func() error {
 		if err := doLogin(ctx, c, *email, password); err != nil {
 			return err
 		}
-		if cmd == "login" {
-			fmt.Println(c.Token())
-			fmt.Fprintln(os.Stderr, "Save this token and pass it with -token or FRANKLINWH_TOKEN to skip login next time.")
-			return nil
+		sess.Email, sess.Token = *email, c.Token()
+		if err := saveSession(*session, sess); err != nil {
+			fmt.Fprintln(os.Stderr, "warning: could not save session:", err)
 		}
-	} else if cmd == "login" {
-		fmt.Println(c.Token())
 		return nil
 	}
 
 	switch cmd {
+	case "login":
+		if *token == "" {
+			if err := login(); err != nil {
+				return err
+			}
+			if *session != "" {
+				fmt.Fprintf(os.Stderr, "Session saved to %s\n", *session)
+			}
+		}
+		fmt.Println(c.Token())
+		return nil
+	case "logout":
+		if c.Token() != "" {
+			if err := c.Logout(ctx); err != nil {
+				fmt.Fprintln(os.Stderr, "warning: server logout failed:", err)
+			}
+		}
+		if *session != "" {
+			if err := os.Remove(*session); err != nil && !errors.Is(err, os.ErrNotExist) {
+				return err
+			}
+		}
+		return nil
+	}
+
+	var run func() error
+	switch cmd {
 	case "gateways":
-		return cmdGateways(ctx, c, *asJSON)
+		run = func() error { return cmdGateways(ctx, c, *asJSON) }
 	case "status":
-		return cmdStatus(ctx, c, *gateway, *asJSON)
+		run = func() error { return cmdStatus(ctx, c, *gateway, *asJSON) }
 	case "raw":
-		return cmdRaw(ctx, c, *gateway)
+		run = func() error { return cmdRaw(ctx, c, *gateway) }
+	case "grid":
+		gfs := flag.NewFlagSet("grid", flag.ContinueOnError)
+		imp := gfs.String("import", "", "grid import limit in kW")
+		exp := gfs.String("export", "", "grid export limit in kW")
+		dry := gfs.Bool("dry-run", false, "show the change without sending it")
+		if err := gfs.Parse(fs.Args()[1:]); err != nil {
+			return err
+		}
+		run = func() error { return cmdGrid(ctx, c, *gateway, *imp, *exp, *dry, *asJSON) }
 	default:
 		usage()
 		return fmt.Errorf("unknown command %q", cmd)
 	}
+
+	if c.Token() == "" {
+		if err := login(); err != nil {
+			return err
+		}
+	}
+	err := run()
+	if fromSession && errors.Is(err, franklinwh.ErrUnauthorized) {
+		// The saved token expired: log in again and retry once.
+		fmt.Fprintln(os.Stderr, "Saved session expired; logging in again.")
+		c.SetToken("")
+		if err := login(); err != nil {
+			return err
+		}
+		err = run()
+	}
+	return err
+}
+
+// session is the login state persisted between runs.
+type session struct {
+	Email    string `json:"email"`
+	Token    string `json:"token"`
+	ClientID string `json:"clientId"`
+}
+
+// defaultSessionPath returns the session file location in the user config
+// directory, or "" (sessions disabled) if there is none.
+func defaultSessionPath() string {
+	dir, err := os.UserConfigDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(dir, "franklinwh", "session.json")
+}
+
+// loadSession reads the session file. A missing or unreadable file yields an
+// empty session.
+func loadSession(path string) session {
+	var s session
+	if path == "" {
+		return s
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if !errors.Is(err, os.ErrNotExist) {
+			fmt.Fprintln(os.Stderr, "warning: reading session:", err)
+		}
+		return s
+	}
+	if err := json.Unmarshal(data, &s); err != nil {
+		fmt.Fprintln(os.Stderr, "warning: ignoring corrupt session file:", err)
+		return session{}
+	}
+	return s
+}
+
+// saveSession writes the session file, readable only by the user since it
+// holds a login token.
+func saveSession(path string, s session) error {
+	if path == "" {
+		return nil
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return err
+	}
+	data, err := json.MarshalIndent(s, "", "  ")
+	if err != nil {
+		return err
+	}
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, append(data, '\n'), 0o600); err != nil {
+		return err
+	}
+	return os.Rename(tmp, path)
+}
+
+func envOr(key, def string) string {
+	if v, ok := os.LookupEnv(key); ok {
+		return v
+	}
+	return def
 }
 
 // doLogin authenticates the client, prompting for a password and for an MFA
@@ -217,6 +364,79 @@ func cmdRaw(ctx context.Context, c *franklinwh.Client, gateway string) error {
 		return err
 	}
 	return printJSON(info)
+}
+
+func cmdGrid(ctx context.Context, c *franklinwh.Client, gateway, imp, exp string, dryRun, asJSON bool) error {
+	id, err := resolveGateway(ctx, c, gateway)
+	if err != nil {
+		return err
+	}
+	l, err := c.GridLimits(ctx, id)
+	if err != nil {
+		return err
+	}
+	if imp == "" && exp == "" {
+		if asJSON {
+			return printJSON(l.Raw)
+		}
+		printGridLimits(l)
+		return nil
+	}
+
+	before := *l
+	if err := parseLimit("import", imp, &l.ImportKW, &l.ImportFlag); err != nil {
+		return err
+	}
+	if err := parseLimit("export", exp, &l.ExportKW, &l.ExportFlag); err != nil {
+		return err
+	}
+	fmt.Println("Current:")
+	printGridLimits(&before)
+	fmt.Println("New:")
+	printGridLimits(l)
+	if dryRun {
+		fmt.Println("(dry run, nothing sent)")
+		return nil
+	}
+	if err := c.SetGridLimits(ctx, id, l); err != nil {
+		return err
+	}
+	after, err := c.GridLimits(ctx, id)
+	if err != nil {
+		return fmt.Errorf("limits sent, but re-reading them failed: %w", err)
+	}
+	fmt.Println("Saved; the gateway now reports:")
+	printGridLimits(after)
+	if after.ImportKW != l.ImportKW || after.ExportKW != l.ExportKW {
+		return errors.New("the server accepted the request but the limits did not change")
+	}
+	return nil
+}
+
+// parseLimit sets *kw from a kW value. An empty value leaves the limit
+// unchanged. Setting a value turns the limit on (flag GridLimitLimited).
+func parseLimit(name, v string, kw *float64, flagVal *int) error {
+	if v == "" {
+		return nil
+	}
+	f, err := strconv.ParseFloat(v, 64)
+	if err != nil || f < 0 {
+		return fmt.Errorf("-%s: want a non-negative number of kW, got %q", name, v)
+	}
+	*kw, *flagVal = f, franklinwh.GridLimitLimited
+	return nil
+}
+
+func printGridLimits(l *franklinwh.GridLimits) {
+	fmt.Printf("  Import from grid: %s\n", limitString(l.ImportKW, l.ImportFlag))
+	fmt.Printf("  Export to grid:   %s\n", limitString(l.ExportKW, l.ExportFlag))
+}
+
+func limitString(kw float64, flagVal int) string {
+	if flagVal == franklinwh.GridLimitLimited {
+		return fmt.Sprintf("%.2f kW", kw)
+	}
+	return fmt.Sprintf("%.2f kW (flag %d, meaning unconfirmed)", kw, flagVal)
 }
 
 // resolveGateway returns the requested gateway ID, or the first one on the

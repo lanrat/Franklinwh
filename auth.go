@@ -11,6 +11,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
+	"strconv"
 )
 
 // Account types, sent as the "type" field of a login request. Homeowners
@@ -66,6 +68,11 @@ type LoginOptions struct {
 	// Usually unnecessary.
 	CaptchaID   string
 	CaptchaCode string
+	// EncryptPassword sends the password AES-encrypted with enc=1, as newer
+	// app versions do. It is off by default: the server rejects it for at
+	// least some accounts ("Incorrect password") while accepting the plain
+	// MD5 hex digest.
+	EncryptPassword bool
 }
 
 // loginKey is the static 16-byte AES key the app uses to encrypt the
@@ -82,28 +89,39 @@ func (c *Client) Login(ctx context.Context, account, password string, opts *Logi
 	if opts == nil {
 		opts = &LoginOptions{}
 	}
-	enc, err := encryptPassword(password)
-	if err != nil {
-		return nil, err
+	pw := md5Hex(password)
+	encFlag := ""
+	if opts.EncryptPassword {
+		var err error
+		if pw, err = encryptPassword(password); err != nil {
+			return nil, err
+		}
+		encFlag = "1"
 	}
-	body := map[string]any{
-		"account":          account,
-		"password":         enc,
-		"type":             opts.AccountType,
-		"softwareVersion":  "APP" + c.appVersion,
-		"optDevice":        c.device.Model,
-		"optSystemVersion": "Android " + c.device.OSVersion,
-		"userType":         "",
-		"captchaId":        opts.CaptchaID,
-		"captchaCode":      opts.CaptchaCode,
-		"timezone":         opts.Timezone,
-		"enc":              "1", // tells the server the password is AES-encrypted
+	// The login endpoint only binds form fields: a JSON body leaves
+	// "account" empty and the server fails with an opaque HTTP 500 from
+	// its judgeAccountExist lookup.
+	form := url.Values{
+		"account":          {account},
+		"password":         {pw},
+		"type":             {strconv.Itoa(opts.AccountType)},
+		"lang":             {c.lang},
+		"softwareVersion":  {"APP" + c.appVersion},
+		"optDevice":        {c.device.Model},
+		"optSystemVersion": {"Android " + c.device.OSVersion},
+		"userType":         {""},
+		"captchaId":        {opts.CaptchaID},
+		"captchaCode":      {opts.CaptchaCode},
+		"timezone":         {opts.Timezone},
+	}
+	if encFlag != "" {
+		form.Set("enc", encFlag) // tells the server the password is AES-encrypted
 	}
 	resp, err := c.do(ctx, request{
 		method:      "POST",
 		path:        gatewayPrefix + "/terminal/initialize/appUserOrInstallerLogin",
-		body:        mustJSON(body),
-		contentType: "application/json",
+		body:        []byte(form.Encode()),
+		contentType: "application/x-www-form-urlencoded",
 		header:      map[string]string{"client-id": c.clientID},
 	})
 	if err != nil {
@@ -183,10 +201,15 @@ func (c *Client) Logout(ctx context.Context) error {
 // A fixed server-side key would be just as (in)secure; this simply matches
 // what the server validates.
 func encryptPassword(password string) (string, error) {
-	sum := md5.Sum([]byte(password))
-	hexHash := hex.EncodeToString(sum[:]) // 32 lowercase hex chars
+	hexHash := md5Hex(password) // 32 lowercase hex chars
 	key := aesKeyFrom(hexHash)
 	return encryptAESCBC([]byte(hexHash), key)
+}
+
+// md5Hex returns the lowercase hex MD5 digest of s.
+func md5Hex(s string) string {
+	sum := md5.Sum([]byte(s))
+	return hex.EncodeToString(sum[:])
 }
 
 // aesKeyFrom returns the middle 16 bytes of s (matching the app's

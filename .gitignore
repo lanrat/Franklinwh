@@ -11,3 +11,8 @@
 .DS_Store
 .idea/
 .vscode/
+
+# app packages used for reverse engineering
+*.apk
+*.xapk
+apk/

@@ -27,6 +27,7 @@ status from their own scripts.
   - [Device composite info (live telemetry)](#device-composite-info-live-telemetry)
   - [`runtimeData` field glossary](#runtimedata-field-glossary)
   - [Other useful read endpoints](#other-useful-read-endpoints)
+- [Grid import/export limits](#grid-importexport-limits)
 - [Device passthrough: `sendMqtt`](#device-passthrough-sendmqtt)
 - [Enumerations](#enumerations)
 - [Direct / local connections](#direct--local-connections)
@@ -117,6 +118,11 @@ On an expired token the app receives **HTTP 401** with body `code: 401`
 
 ### Password encryption
 
+> **Note:** a plain lowercase hex MD5 of the password, sent **without** an
+> `enc` field, is what the server reliably accepts. The AES scheme below was
+> rejected with "Incorrect password" for a real homeowner account, so the
+> client only uses it when `LoginOptions.EncryptPassword` is set.
+
 The app does not send the password in cleartext (beyond TLS). It obfuscates
 it client-side; the server expects this exact transformation:
 
@@ -135,27 +141,29 @@ reference implementation is in [`auth.go`](../auth.go) (`encryptPassword`).
 
 ```
 POST /hes-gateway/terminal/initialize/appUserOrInstallerLogin
-Content-Type: application/json
+Content-Type: application/x-www-form-urlencoded
 client-id: <stable UUID for this install>
 ```
 
-Body:
+Body (form fields, shown one per line):
 
-```json
-{
-  "account": "you@example.com",
-  "password": "<base64(ct)>:<base64(iv)>",
-  "enc": "1",
-  "type": 0,
-  "softwareVersion": "APP2.23.0",
-  "optDevice": "Pixel 7",
-  "optSystemVersion": "Android 14",
-  "userType": "",
-  "captchaId": "",
-  "captchaCode": "",
-  "timezone": "America/Chicago"
-}
 ```
+account=you@example.com
+password=<lowercase hex MD5 of the password>
+type=0
+lang=en_US
+softwareVersion=APP2.23.0
+optDevice=Pixel 7
+optSystemVersion=Android 14
+userType=
+captchaId=
+captchaCode=
+timezone=America/Chicago
+```
+
+The body **must be form-encoded**. A JSON body is not bound: the server
+sees an empty `account` and fails with `code: 500` ("Unexpected runtime
+error occurred ... judgeAccountExist"), whatever the credentials.
 
 - **`type`** is the account type: `0` = homeowner, `2`/`3` = installer
   (see [Account types](#account-types)).
@@ -336,6 +344,61 @@ All take `?gatewayId=<ID>` unless noted.
 | `GET /hes-gateway/terminal/backupHistorySummary` | Backup event history summary. |
 | `GET /api-energy/power/getFhpPowerByDay?gatewayId=&dayTime=YYYY-MM-DD` | Power time-series arrays for a day (home screen graph). |
 | `GET /api-energy/electric/getFhpElectricData?gatewayId=&type=&startDate=` | Energy statistics by day/week/month/year (`type` selects period). |
+
+## Grid import/export limits
+
+The app's "Power Control System" screen. Newer app versions (seen in
+2.20.1) show these as read-only for homeowners ("Setting may not be changed.
+Contact your installer if required."); the API still returns them.
+
+```
+GET /hes-gateway/terminal/tou/getPowerControlSetting?gatewayId=<ID>
+```
+
+Live `result` from a homeowner account (abridged):
+
+```json
+{
+  "gridMax": 2.5,               "gridMaxFlag": 2,
+  "gridFeedMax": 2.0,           "gridFeedMaxFlag": 2,
+  "globalGridChargeMax": 2.5,   "globalGridDischargeMax": 2.0,
+  "globalSettingStatus": 0,
+  "gridFlag": true, "solarFlag": true,
+  "notControlExportSolar": false,
+  "sgipFlag": 1, "itcFlag": 1, "isNem3": 0, "isCalifornia": 1,
+  "peakDemandGridMax": null, "apowerNumber": 1
+}
+```
+
+- **`globalGridChargeMax`** — stored grid **import** limit, kW (what the app shows).
+- **`globalGridDischargeMax`** — stored grid **export** limit, kW.
+- **`gridMax` / `gridFeedMax`** — normally equal to the two above. They were
+  seen at `-1` / `10` (apparently "no limit" / the maximum) after some writes.
+- **`gridMaxFlag` / `gridFeedMaxFlag`** — limit mode. `2` accompanies a kW
+  limit ("Limit"). The app's other options are "No limit" and "No Export";
+  their codes are **unconfirmed**.
+
+To change them:
+
+```
+POST /hes-gateway/terminal/tou/setPowerControlV2
+Content-Type: application/json
+softwareVersion: APP2.6.2
+```
+
+Body: the `getPowerControlSetting` result with `gatewayId` added. Verified
+against a live gateway:
+
+- The server takes the new limits from **`gridMax`** (import) and
+  **`gridFeedMax`** (export) and stores them into `globalGridChargeMax` /
+  `globalGridDischargeMax`. The `global*` fields in the request are ignored,
+  so sending a read result back unchanged can *change* the limits if
+  `gridMax`/`gridFeedMax` differ from the `global*` values.
+- For a homeowner, the server answers `code: 400` "This setting is read-only.
+  Please contact your Certified Installer…" when the `softwareVersion` header
+  is a current app version (2.23.0). With an older version (`APP2.6.2`) it
+  accepts the change. The older `/terminal/tou/setPowerControl` behaves the
+  same way.
 
 ## Device passthrough: `sendMqtt`
 
