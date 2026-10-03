@@ -1,0 +1,382 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="ui-token" content="__UI_TOKEN__">
+<title>FranklinWH</title>
+<style>
+  :root {
+    --bg: #f4f5f7; --panel: #ffffff; --fg: #1a1c1e; --muted: #5c6370;
+    --border: #e1e4e8; --accent: #2f6f4f; --accent-fg: #ffffff;
+    --grid: #d98324; --solar: #e0a500; --battery: #2f6f4f; --home: #3a6ea5;
+    --danger: #b3261e; --shadow: 0 1px 3px rgba(0,0,0,.08);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #16181c; --panel: #202329; --fg: #e6e8eb; --muted: #9aa1ac;
+      --border: #30343b; --accent: #4caf7d; --accent-fg: #0d1b13;
+      --grid: #e0a35a; --solar: #e8c252; --battery: #4caf7d; --home: #6fa8dc;
+      --danger: #f2b8b5; --shadow: none;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font: 15px/1.5 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    background: var(--bg); color: var(--fg);
+  }
+  header {
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    padding: 14px 20px; border-bottom: 1px solid var(--border); background: var(--panel);
+  }
+  header h1 { font-size: 18px; margin: 0; font-weight: 650; }
+  header .spacer { flex: 1; }
+  main { max-width: 860px; margin: 0 auto; padding: 20px 16px 60px; }
+  .hidden { display: none !important; }
+  button {
+    font: inherit; cursor: pointer; border: 1px solid var(--border);
+    background: var(--panel); color: var(--fg); border-radius: 8px; padding: 8px 14px;
+  }
+  button.primary { background: var(--accent); color: var(--accent-fg); border-color: transparent; }
+  button:disabled { opacity: .5; cursor: default; }
+  select, input {
+    font: inherit; padding: 8px 10px; border: 1px solid var(--border);
+    border-radius: 8px; background: var(--panel); color: var(--fg); max-width: 100%;
+  }
+  label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+  .field { margin-bottom: 14px; }
+  .panel {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+    padding: 18px; margin-bottom: 18px; box-shadow: var(--shadow);
+  }
+  .panel h2 { font-size: 14px; text-transform: uppercase; letter-spacing: .04em;
+    color: var(--muted); margin: 0 0 14px; font-weight: 600; }
+  .cards { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
+  .card { border: 1px solid var(--border); border-radius: 12px; padding: 16px; background: var(--panel); }
+  .card .k { font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 7px; }
+  .card .v { font-size: 26px; font-weight: 650; margin-top: 6px; }
+  .card .sub { font-size: 13px; color: var(--muted); margin-top: 2px; min-height: 18px; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+  .dot.battery { background: var(--battery); } .dot.grid { background: var(--grid); }
+  .dot.solar { background: var(--solar); } .dot.home { background: var(--home); }
+  .dot.gen { background: var(--muted); }
+  .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; }
+  .row .field { margin-bottom: 0; }
+  .note { font-size: 13px; color: var(--muted); margin-top: 10px; }
+  #toast {
+    position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%);
+    background: var(--fg); color: var(--bg); padding: 10px 16px; border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0,0,0,.25); max-width: 90%; opacity: 0;
+    transition: opacity .2s; pointer-events: none;
+  }
+  #toast.show { opacity: 1; }
+  #toast.error { background: var(--danger); color: #fff; }
+  .muted { color: var(--muted); }
+  .status-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+  .status-head .mode { font-weight: 600; }
+  a { color: var(--home); }
+</style>
+</head>
+<body>
+<header>
+  <h1>FranklinWH</h1>
+  <span id="gwWrap" class="hidden"><select id="gateway" title="Gateway"></select></span>
+  <span class="spacer"></span>
+  <span id="updated" class="muted" style="font-size:13px"></span>
+  <button id="logoutBtn" class="hidden">Log out</button>
+  <button id="quitBtn" title="Stop the local server">Quit</button>
+</header>
+
+<main>
+  <!-- Login -->
+  <section id="loginView" class="panel hidden" style="max-width:420px;margin:40px auto">
+    <h2>Sign in</h2>
+    <div id="loginFields">
+      <div class="field"><label for="email">Email</label><input id="email" type="email" autocomplete="username" style="width:100%"></div>
+      <div class="field"><label for="password">Password</label><input id="password" type="password" autocomplete="current-password" style="width:100%"></div>
+      <button id="loginBtn" class="primary" style="width:100%">Sign in</button>
+    </div>
+    <div id="mfaFields" class="hidden">
+      <p class="note" id="mfaHint"></p>
+      <div class="field"><label for="mfaCode">Verification code</label><input id="mfaCode" inputmode="numeric" autocomplete="one-time-code" style="width:100%"></div>
+      <div class="row">
+        <button id="mfaVerifyBtn" class="primary">Verify</button>
+        <button id="mfaResendBtn" class="hidden">Resend email code</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Dashboard -->
+  <section id="dashView" class="hidden">
+    <div class="status-head">
+      <span class="mode" id="mode"></span>
+      <span class="muted" id="gwid"></span>
+    </div>
+    <div class="cards" id="cards"></div>
+
+    <div class="panel" style="margin-top:18px">
+      <h2>Grid import / export limits</h2>
+      <div class="row">
+        <div class="field">
+          <label for="importKW">Import limit (kW)</label>
+          <input id="importKW" type="number" min="0" step="0.1" style="width:140px">
+        </div>
+        <div class="field">
+          <label for="exportKW">Export limit (kW)</label>
+          <input id="exportKW" type="number" min="0" step="0.1" style="width:140px">
+        </div>
+        <button id="applyGrid" class="primary">Apply</button>
+        <button id="reloadGrid">Reset</button>
+      </div>
+      <p class="note" id="gridNote">Newer firmware may treat these as read-only for homeowners; the app reports an older version to change them.</p>
+    </div>
+  </section>
+</main>
+
+<div id="toast"></div>
+
+<script>
+"use strict";
+const TOKEN = document.querySelector('meta[name="ui-token"]').content;
+const $ = (id) => document.getElementById(id);
+
+async function api(path, opts = {}) {
+  opts.headers = Object.assign({ "X-UI-Token": TOKEN }, opts.headers || {});
+  if (opts.body && typeof opts.body !== "string") {
+    opts.headers["Content-Type"] = "application/json";
+    opts.body = JSON.stringify(opts.body);
+  }
+  const res = await fetch(path, opts);
+  let data = {};
+  try { data = await res.json(); } catch (e) {}
+  if (!res.ok) {
+    const err = new Error(data.error || res.statusText);
+    err.status = res.status; err.needLogin = data.needLogin;
+    throw err;
+  }
+  return data;
+}
+
+let toastTimer;
+function toast(msg, isError) {
+  const t = $("toast");
+  t.textContent = msg;
+  t.className = "show" + (isError ? " error" : "");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => (t.className = ""), isError ? 6000 : 3000);
+}
+
+function show(view) {
+  $("loginView").classList.toggle("hidden", view !== "login");
+  $("dashView").classList.toggle("hidden", view !== "dash");
+  $("logoutBtn").classList.toggle("hidden", view !== "dash");
+  $("gwWrap").classList.toggle("hidden", view !== "dash");
+}
+
+function fmtKW(v) { return (v >= 0 ? "" : "") + v.toFixed(3) + " kW"; }
+
+function card(dotClass, title, value, sub) {
+  return `<div class="card"><div class="k"><span class="dot ${dotClass}"></span>${title}</div>`
+    + `<div class="v">${value}</div><div class="sub">${sub || ""}</div></div>`;
+}
+
+function renderStatus(st) {
+  $("mode").textContent = st.Mode || "";
+  $("gwid").textContent = st.GatewayID || "";
+  const b = st.Battery, g = st.Grid, s = st.Solar, gen = st.Generator;
+  const batSub = Math.abs(b.PowerKW) < 0.0005 ? "idle"
+    : (b.Charging ? "charging " : "discharging ") + Math.abs(b.PowerKW).toFixed(3) + " kW";
+  const units = (b.PerUnitSoC || []).map(x => x.toFixed(0) + "%").join(", ");
+  const gridSub = (g.Connected ? "on-grid · " : "off-grid · ")
+    + (Math.abs(g.PowerKW) < 0.0005 ? "idle" : (g.Importing ? "importing" : "exporting"));
+  const cards = [
+    card("battery", "Battery", b.SoC.toFixed(1) + "%", batSub + (units ? " · " + units : "")),
+    card("grid", "Grid", fmtKW(g.PowerKW), gridSub),
+    card("solar", "Solar", fmtKW(s.PowerKW), s.Producing ? "producing" : "idle"),
+    card("home", "Home load", fmtKW(st.HomeLoadKW), ""),
+  ];
+  if (gen && (gen.Running || Math.abs(gen.PowerKW) > 0.0005)) {
+    cards.push(card("gen", "Generator", fmtKW(gen.PowerKW), gen.Running ? "running" : ""));
+  }
+  $("cards").innerHTML = cards.join("");
+  $("updated").textContent = "updated " + new Date().toLocaleTimeString();
+}
+
+function renderGrid(gr) {
+  $("importKW").value = gr.importLimited ? gr.importKW : "";
+  $("exportKW").value = gr.exportLimited ? gr.exportKW : "";
+  $("importKW").placeholder = gr.importLimited ? "" : "no limit";
+  $("exportKW").placeholder = gr.exportLimited ? "" : "no limit";
+}
+
+let currentGateway = "";
+let refreshTimer;
+
+async function loadGateways() {
+  const gws = await api("/api/gateways");
+  const sel = $("gateway");
+  sel.innerHTML = "";
+  (gws || []).forEach(g => {
+    const o = document.createElement("option");
+    o.value = g.id; o.textContent = (g.name || g.id) + " (" + g.id + ")";
+    sel.appendChild(o);
+  });
+  sel.classList.toggle("hidden", (gws || []).length <= 1);
+  currentGateway = gws && gws.length ? gws[0].id : "";
+  return gws || [];
+}
+
+async function refresh() {
+  try {
+    const st = await api("/api/status?gateway=" + encodeURIComponent(currentGateway));
+    renderStatus(st);
+  } catch (e) {
+    if (e.needLogin) { toLogin(); return; }
+    toast("status: " + e.message, true);
+  }
+}
+
+async function loadGrid() {
+  try {
+    const gr = await api("/api/grid?gateway=" + encodeURIComponent(currentGateway));
+    renderGrid(gr);
+  } catch (e) {
+    if (e.needLogin) { toLogin(); return; }
+    toast("grid: " + e.message, true);
+  }
+}
+
+async function enterDashboard() {
+  show("dash");
+  const gws = await loadGateways();
+  if (!gws.length) { toast("no gateways on this account", true); return; }
+  await Promise.all([refresh(), loadGrid()]);
+  clearInterval(refreshTimer);
+  refreshTimer = setInterval(refresh, 10000);
+}
+
+function toLogin() {
+  clearInterval(refreshTimer);
+  show("login");
+  $("mfaFields").classList.add("hidden");
+  $("loginFields").classList.remove("hidden");
+  api("/api/session").then(s => { if (s.email) $("email").value = s.email; }).catch(() => {});
+}
+
+// --- login flow ---
+let mfaToken = "", mfaMethod = "";
+
+async function doLogin() {
+  const email = $("email").value.trim(), password = $("password").value;
+  if (!email || !password) { toast("enter email and password", true); return; }
+  $("loginBtn").disabled = true;
+  try {
+    const r = await api("/api/login", { method: "POST", body: { email, password } });
+    if (r.mfaRequired) {
+      mfaToken = r.mfaToken; mfaMethod = r.method;
+      $("loginFields").classList.add("hidden");
+      $("mfaFields").classList.remove("hidden");
+      const email = r.maskedEmail ? " to " + r.maskedEmail : "";
+      if (mfaMethod === "EMAIL_OTP") {
+        $("mfaHint").textContent = "A code was emailed" + email + ".";
+        $("mfaResendBtn").classList.remove("hidden");
+        api("/api/mfa/send", { method: "POST", body: { mfaToken } }).catch(() => {});
+      } else {
+        $("mfaHint").textContent = "Enter the code from your authenticator app.";
+        $("mfaResendBtn").classList.add("hidden");
+      }
+      $("mfaCode").focus();
+      return;
+    }
+    await enterDashboard();
+  } catch (e) {
+    toast(e.message, true);
+  } finally {
+    $("loginBtn").disabled = false;
+  }
+}
+
+async function doVerify() {
+  const code = $("mfaCode").value.trim();
+  if (!code) { toast("enter the code", true); return; }
+  $("mfaVerifyBtn").disabled = true;
+  try {
+    await api("/api/mfa/verify", { method: "POST", body: { mfaToken, method: mfaMethod, code, email: $("email").value.trim() } });
+    await enterDashboard();
+  } catch (e) {
+    toast(e.message, true);
+  } finally {
+    $("mfaVerifyBtn").disabled = false;
+  }
+}
+
+// --- grid controls ---
+async function applyGrid() {
+  const impStr = $("importKW").value.trim(), expStr = $("exportKW").value.trim();
+  const body = { gateway: currentGateway };
+  if (impStr !== "") body.import = parseFloat(impStr);
+  if (expStr !== "") body.export = parseFloat(expStr);
+  if (body.import === undefined && body.export === undefined) {
+    toast("enter an import and/or export limit", true); return;
+  }
+  const parts = [];
+  if (body.import !== undefined) parts.push("import " + body.import + " kW");
+  if (body.export !== undefined) parts.push("export " + body.export + " kW");
+  if (!confirm("Set grid limits: " + parts.join(", ") + "?")) return;
+  $("applyGrid").disabled = true;
+  try {
+    const gr = await api("/api/grid", { method: "POST", body });
+    renderGrid(gr);
+    toast("grid limits saved");
+  } catch (e) {
+    toast("set grid: " + e.message, true);
+  } finally {
+    $("applyGrid").disabled = false;
+  }
+}
+
+// --- lifecycle ---
+async function quit() {
+  clearInterval(refreshTimer);
+  try { await api("/api/quit", { method: "POST" }); } catch (e) {}
+  document.body.innerHTML = '<main><div class="panel" style="max-width:420px;margin:60px auto;text-align:center">'
+    + 'The FranklinWH dashboard has stopped. You can close this tab.</div></main>';
+}
+
+function startHeartbeat() {
+  setInterval(() => { api("/api/ping", { method: "POST" }).catch(() => {}); }, 5000);
+}
+
+window.addEventListener("load", async () => {
+  $("loginBtn").addEventListener("click", doLogin);
+  $("password").addEventListener("keydown", e => { if (e.key === "Enter") doLogin(); });
+  $("mfaVerifyBtn").addEventListener("click", doVerify);
+  $("mfaCode").addEventListener("keydown", e => { if (e.key === "Enter") doVerify(); });
+  $("mfaResendBtn").addEventListener("click", () => {
+    api("/api/mfa/send", { method: "POST", body: { mfaToken } })
+      .then(() => toast("code resent")).catch(e => toast(e.message, true));
+  });
+  $("logoutBtn").addEventListener("click", async () => {
+    await api("/api/logout", { method: "POST" }).catch(() => {});
+    toLogin();
+  });
+  $("quitBtn").addEventListener("click", quit);
+  $("applyGrid").addEventListener("click", applyGrid);
+  $("reloadGrid").addEventListener("click", loadGrid);
+  $("gateway").addEventListener("change", async (e) => {
+    currentGateway = e.target.value;
+    await Promise.all([refresh(), loadGrid()]);
+  });
+
+  startHeartbeat();
+  // Decide the initial view: try to use an existing session.
+  try {
+    await loadGateways();
+    await enterDashboard();
+  } catch (e) {
+    toLogin();
+  }
+});
+</script>
+</body>
+</html>

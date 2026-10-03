@@ -1,6 +1,8 @@
-// Command franklinwh is a small command-line client for the FranklinWH
-// cloud API. It can log in (handling MFA), list gateways, and print battery,
-// grid and solar status as text or JSON.
+// Command franklinwh is a client for the FranklinWH cloud API. Run with no
+// arguments (or on Windows, double-click the .exe) it opens a local web
+// dashboard in the browser; run with a subcommand it works as a CLI that can
+// log in (handling MFA), list gateways, print battery/grid/solar status, and
+// read or set grid import/export limits.
 //
 // Credentials are taken from flags or the environment:
 //
@@ -45,6 +47,10 @@ import (
 )
 
 func main() {
+	// On Windows the binary is a GUI-subsystem app; attach to the parent
+	// console (if any) so CLI output still works from a terminal. No-op
+	// elsewhere.
+	attachConsole()
 	if err := run(os.Args[1:]); err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(1)
@@ -55,13 +61,16 @@ func usage() {
 	fmt.Fprint(os.Stderr, `franklinwh - unofficial FranklinWH CLI
 
 Usage:
-  franklinwh [global flags] <command> [flags]
+  franklinwh [global flags] [command] [flags]
+
+With no command it opens the graphical dashboard in your browser.
 
 Commands:
+  gui         Open the dashboard in a browser (default when no command given)
   login       Log in (always prompts), save the session and print the token
   logout      Invalidate the saved token and delete the session file
   gateways    List the gateways on the account
-  status      Print battery, grid and solar status (default)
+  status      Print battery, grid and solar status
   raw         Print the full device telemetry JSON
   grid        Show grid import/export limits; set them with
               grid [-import kW] [-export kW] [-dry-run]
@@ -75,6 +84,8 @@ Global flags:
   -gateway string    gateway ID (or FRANKLINWH_GATEWAY; defaults to the first)
   -json              output JSON where supported
   -timeout duration  overall timeout (default 45s)
+  -addr string       gui: address to listen on (default 127.0.0.1:0)
+  -no-browser        gui: do not open a browser automatically
 
 Environment variables are used when the matching flag is not set.
 `)
@@ -84,21 +95,39 @@ func run(args []string) error {
 	fs := flag.NewFlagSet("franklinwh", flag.ContinueOnError)
 	fs.Usage = usage
 	var (
-		email    = fs.String("email", os.Getenv("FRANKLINWH_EMAIL"), "account email")
-		password = fs.String("password", os.Getenv("FRANKLINWH_PASSWORD"), "account password")
-		token    = fs.String("token", os.Getenv("FRANKLINWH_TOKEN"), "saved login token")
-		gateway  = fs.String("gateway", os.Getenv("FRANKLINWH_GATEWAY"), "gateway ID")
-		session  = fs.String("session", envOr("FRANKLINWH_SESSION", defaultSessionPath()), "session file (empty disables)")
-		baseURL  = fs.String("base-url", os.Getenv("FRANKLINWH_BASE_URL"), "API base URL (advanced; defaults to the production endpoint)")
-		asJSON   = fs.Bool("json", false, "output JSON where supported")
-		timeout  = fs.Duration("timeout", 45*time.Second, "overall timeout")
+		email     = fs.String("email", os.Getenv("FRANKLINWH_EMAIL"), "account email")
+		password  = fs.String("password", os.Getenv("FRANKLINWH_PASSWORD"), "account password")
+		token     = fs.String("token", os.Getenv("FRANKLINWH_TOKEN"), "saved login token")
+		gateway   = fs.String("gateway", os.Getenv("FRANKLINWH_GATEWAY"), "gateway ID")
+		session   = fs.String("session", envOr("FRANKLINWH_SESSION", defaultSessionPath()), "session file (empty disables)")
+		baseURL   = fs.String("base-url", os.Getenv("FRANKLINWH_BASE_URL"), "API base URL (advanced; defaults to the production endpoint)")
+		asJSON    = fs.Bool("json", false, "output JSON where supported")
+		timeout   = fs.Duration("timeout", 45*time.Second, "overall timeout")
+		addr      = fs.String("addr", "127.0.0.1:0", "gui: address to listen on")
+		noBrowser = fs.Bool("no-browser", false, "gui: do not open a browser")
 	)
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	cmd := "status"
+	// With no command (e.g. a double-click on Windows) open the GUI.
+	cmd := "gui"
 	if fs.NArg() > 0 {
 		cmd = fs.Arg(0)
+	}
+
+	if cmd == "gui" {
+		sess := loadSession(*session)
+		if sess.ClientID == "" {
+			sess.ClientID = franklinwh.NewClientID()
+		}
+		return runGUI(guiConfig{
+			addr:        *addr,
+			baseURL:     *baseURL,
+			sessionPath: *session,
+			sess:        sess,
+			email:       *email,
+			openBrowser: !*noBrowser,
+		})
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), *timeout)

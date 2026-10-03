@@ -1,9 +1,11 @@
 # franklinwh
 
-An unofficial Go client and command-line tool for the **FranklinWH** cloud
-API — the service behind the FranklinWH app (`com.Franklinwh.FamilyEnergy`)
-that monitors aGate / aPower home energy systems. It lets you read your
-**battery**, **grid** and **solar** status from your own scripts.
+An unofficial Go client, command-line tool, and local web dashboard for the
+**FranklinWH** cloud API — the service behind the FranklinWH app
+(`com.Franklinwh.FamilyEnergy`) that monitors aGate / aPower home energy
+systems. It lets you see your **battery**, **grid** and **solar** status, and
+read or set grid import/export limits, from a GUI, the command line, or your
+own scripts.
 
 The protocol was reverse engineered from version 2.23.0 of the Android app and
 is documented in **[docs/API.md](docs/API.md)**.
@@ -22,7 +24,28 @@ go install github.com/lanrat/franklinwh/cmd/franklinwh@latest
 go get github.com/lanrat/franklinwh
 ```
 
-Requires Go 1.24+.
+Requires Go 1.24+. Pre-built Linux and Windows x64 binaries are attached to
+each [release](https://github.com/lanrat/franklinwh/releases).
+
+## Desktop dashboard (GUI)
+
+Run `franklinwh` with **no arguments** to open a local dashboard in your
+browser — login (with MFA), live battery/grid/solar status that refreshes
+every ~10 s, and the grid import/export controls:
+
+```sh
+franklinwh            # opens http://127.0.0.1:<port>/ in your browser
+```
+
+- **Windows:** just **double-click `franklinwh.exe`** — it opens the dashboard
+  with no console window. The same exe is still a full CLI from a terminal.
+- It runs a small server bound to `127.0.0.1` only; every request carries a
+  per-launch token, so other programs and websites can't reach it.
+- Click **Quit** (or close the tab) to stop it. Flags: `-addr` to choose the
+  listen address, `-no-browser` to not auto-open one.
+
+The GUI makes the API calls from Go, so there is no browser CORS issue and
+nothing is sent anywhere except FranklinWH's own servers.
 
 ## Command-line usage
 

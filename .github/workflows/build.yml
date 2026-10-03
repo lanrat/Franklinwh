@@ -51,7 +51,13 @@ jobs:
         run: |
           mkdir -p dist
           out="dist/franklinwh-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}"
-          go build -trimpath -ldflags "-s -w" -o "$out" ./cmd/franklinwh
+          ldflags="-s -w"
+          # Link the Windows binary for the GUI subsystem so double-clicking it
+          # opens the dashboard without a console window flashing up.
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            ldflags="$ldflags -H=windowsgui"
+          fi
+          go build -trimpath -ldflags "$ldflags" -o "$out" ./cmd/franklinwh
           echo "built $out"
       - name: Upload artifact
         uses: actions/upload-artifact@v7
