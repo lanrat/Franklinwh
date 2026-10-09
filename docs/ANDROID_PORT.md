@@ -142,9 +142,10 @@ Notes:
 - **Stack.** Kotlin, Jetpack Compose with Material 3 (dynamic color and dark
   mode for free), a ViewModel and StateFlow per screen, and Navigation-Compose.
   Use Hilt or plain manual DI; the app is small, so manual DI is fine.
-- **minSdk 26, targetSdk the current release.** Build ABIs `arm64-v8a` and
-  `armeabi-v7a`, plus `x86_64` for the emulator. Ship either per-ABI APK splits
-  or an AAB.
+- **minSdk 26, targetSdk the current release.** Build only `arm64-v8a`: the
+  supported phones are the Pixel 7 and newer, which are 64-bit ARM only. Use
+  an arm64 emulator image, or set `TARGETS=android/arm64,android/amd64` to
+  add x86_64.
 - **`FranklinRepository`.** It owns the single `mobile.Client`, moves calls to
   `Dispatchers.IO`, decodes the JSON into data classes, and turns
   `unauthorized:` into a `SessionExpired` event that the nav graph sends to
@@ -202,7 +203,7 @@ Add an `android` job to `.github/workflows/build.yml` that runs after `test`:
 2. Run `go install golang.org/x/mobile/cmd/gomobile@<pinned>` and then
    `gomobile init`.
 3. Run
-   `gomobile bind -target=android/arm64,android/arm,android/amd64 -androidapi 26 -trimpath -ldflags="-s -w" -o android/app/libs/franklinwh.aar ./mobile`.
+   `gomobile bind -target=android/arm64 -androidapi 26 -trimpath -ldflags="-s -w" -o android/app/libs/franklinwh.aar ./mobile`.
 4. Run `./gradlew :app:testDebugUnitTest :app:assembleRelease` (or
    `bundleRelease`).
 5. On `v*` tags, sign the APK with a keystore stored in repo secrets and attach
@@ -222,7 +223,7 @@ adds the APK.
 | Phase | Deliverable | Done when |
 |---|---|---|
 | 0. Library prep ✅ | `UpdateGridLimits`, `DefaultGateway` and `PreferredMFA` in the library; the CLI and GUI switched to them | `go test ./...` passes, and the CLI and GUI behave as before |
-| 1. Go facade ✅ | The `mobile/` package and its tests, plus a local `gomobile bind` that produces an AAR | `go test ./mobile` passes, and the AAR builds for the 3 ABIs |
+| 1. Go facade ✅ | The `mobile/` package and its tests, plus a local `gomobile bind` that produces an AAR | `go test ./mobile` passes, and the AAR builds (arm64 only since v0.2.0) |
 | 2. App skeleton + auth (WebView; built, untested on device) | A Gradle project, `SessionStore`, and the Login and MFA screens | You can log in with real credentials (TOTP and email OTP), and the session survives an app restart |
 | 3. Dashboard | Status polling, the gateway picker, and session-expired handling | The values match `franklinwh status` and polling pauses in the background |
 | 4. Grid limits + settings | The read/write screen and logout | You can set and read back limits on a real gateway, and validation rejects negative values |
@@ -243,8 +244,7 @@ the new code, roughly 1.5–2.5k lines of Kotlin.
 - **Instrumented tests.** Compose UI tests for the login, MFA and grid forms.
   Add one smoke test that loads the real AAR and calls `NewClient` and
   `Token()`, so JNI or ABI packaging problems are caught.
-- **Manual.** Run against a real account on a physical arm64 device, plus the
-  x86_64 emulator.
+- **Manual.** Run against a real account on a Pixel 7 or newer.
 
 ## 7. Risks & open questions
 
