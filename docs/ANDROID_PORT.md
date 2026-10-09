@@ -3,6 +3,14 @@
 A plan for shipping the FranklinWH dashboard as a native Android app, built on
 the existing Go client.
 
+> **Status:** phases 0–1 are done; phase 2 is built but not yet tested on a
+> device with a real account. Phase 2 was cut down to the WebView
+> shortcut (option C below): `android/` is one Activity that starts the
+> desktop dashboard's server in-process (`mobile.StartServer`) and loads it
+> in a WebView, so login, MFA, status and grid limits all work through the
+> existing page. The native Compose screens in phases 3–4 would replace the
+> WebView; the `mobile` JSON API is ready for them.
+
 ## 1. What exists today
 
 | Piece | Files | Size | What it does |
@@ -215,7 +223,7 @@ adds the APK.
 |---|---|---|
 | 0. Library prep ✅ | `UpdateGridLimits`, `DefaultGateway` and `PreferredMFA` in the library; the CLI and GUI switched to them | `go test ./...` passes, and the CLI and GUI behave as before |
 | 1. Go facade ✅ | The `mobile/` package and its tests, plus a local `gomobile bind` that produces an AAR | `go test ./mobile` passes, and the AAR builds for the 3 ABIs |
-| 2. App skeleton + auth | A Gradle project, `SessionStore`, and the Login and MFA screens | You can log in with real credentials (TOTP and email OTP), and the session survives an app restart |
+| 2. App skeleton + auth (WebView; built, untested on device) | A Gradle project, `SessionStore`, and the Login and MFA screens | You can log in with real credentials (TOTP and email OTP), and the session survives an app restart |
 | 3. Dashboard | Status polling, the gateway picker, and session-expired handling | The values match `franklinwh status` and polling pauses in the background |
 | 4. Grid limits + settings | The read/write screen and logout | You can set and read back limits on a real gateway, and validation rejects negative values |
 | 5. CI + release | The Android job and a signed APK on tag | A tagged build publishes an APK |

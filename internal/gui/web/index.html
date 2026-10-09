@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="ui-token" content="__UI_TOKEN__">
+<meta name="embedded" content="__EMBEDDED__">
 <title>FranklinWH</title>
 <style>
   :root {
@@ -138,6 +139,8 @@
 <script>
 "use strict";
 const TOKEN = document.querySelector('meta[name="ui-token"]').content;
+// Embedded in an app (Android) that owns the server: no Quit button.
+const EMBEDDED = document.querySelector('meta[name="embedded"]').content === "1";
 const $ = (id) => document.getElementById(id);
 
 async function api(path, opts = {}) {
@@ -360,7 +363,8 @@ window.addEventListener("load", async () => {
     await api("/api/logout", { method: "POST" }).catch(() => {});
     toLogin();
   });
-  $("quitBtn").addEventListener("click", quit);
+  if (EMBEDDED) $("quitBtn").style.display = "none";
+  else $("quitBtn").addEventListener("click", quit);
   $("applyGrid").addEventListener("click", applyGrid);
   $("reloadGrid").addEventListener("click", loadGrid);
   $("gateway").addEventListener("change", async (e) => {

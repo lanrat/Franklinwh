@@ -177,20 +177,25 @@ go build ./...
 Tests run against an in-process fake server and do not need an account or
 network access.
 
-### Android library
+### Android app
 
-`mobile/` is a [gomobile](https://pkg.go.dev/golang.org/x/mobile/cmd/gomobile)
-facade over the library for the planned Android app
-([docs/ANDROID_PORT.md](docs/ANDROID_PORT.md)). Its methods return JSON
-documents described by `mobile/schema`. To build the AAR (needs a JDK, the
-Android SDK and NDK):
+`android/` is a minimal Android app that shows the same dashboard as the
+desktop GUI in a WebView: the Go library runs the dashboard server inside the
+app on a random loopback port. It needs Android 8.0 (API 26) or newer. CI
+builds a debug-signed APK on every push (the `franklinwh-android` artifact).
+
+To build it yourself (needs a JDK 17, the Android SDK and NDK):
 
 ```sh
-scripts/build-aar.sh            # writes android/app/libs/franklinwh.aar
+scripts/build-aar.sh                      # Go library -> android/app/libs/franklinwh.aar
+cd android && ./gradlew :app:assembleDebug
+adb install app/build/outputs/apk/debug/app-debug.apk
 ```
 
-The Java classes are in `com.github.lanrat.franklinwh.mobile`; CI builds the
-AAR on every push.
+`mobile/` is the [gomobile](https://pkg.go.dev/golang.org/x/mobile/cmd/gomobile)
+package the app is built from. Besides `StartServer`, it offers a native API
+whose methods return JSON documents described by `mobile/schema`, for a future
+native UI ([docs/ANDROID_PORT.md](docs/ANDROID_PORT.md)).
 
 ## Disclaimer
 

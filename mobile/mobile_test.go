@@ -317,3 +317,31 @@ func errString(err error) string {
 	}
 	return err.Error()
 }
+
+func TestStartServer(t *testing.T) {
+	dir := t.TempDir()
+	u, err := StartServer(dir, "Pixel 9", "", "16")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(StopServer)
+	if !strings.HasPrefix(u, "http://127.0.0.1:") || !strings.Contains(u, "?t=") {
+		t.Errorf("URL = %q", u)
+	}
+	if again, err := StartServer(dir, "", "", ""); err != nil || again != u {
+		t.Errorf("second StartServer = %q, %v; want %q", again, err, u)
+	}
+	resp, err := http.Get(u)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if resp.StatusCode != 200 || !strings.Contains(string(body), `content="1"`) {
+		t.Errorf("page: %d, embedded flag missing", resp.StatusCode)
+	}
+	StopServer()
+	if _, err := http.Get(u); err == nil {
+		t.Error("server still answering after StopServer")
+	}
+}

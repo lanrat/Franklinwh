@@ -43,6 +43,7 @@ import (
 	"time"
 
 	"github.com/lanrat/franklinwh"
+	"github.com/lanrat/franklinwh/internal/gui"
 	"golang.org/x/term"
 )
 
@@ -116,18 +117,13 @@ func run(args []string) error {
 	}
 
 	if cmd == "gui" {
-		sess := loadSession(*session)
-		if sess.ClientID == "" {
-			sess.ClientID = franklinwh.NewClientID()
-		}
-		return runGUI(guiConfig{
-			addr:        *addr,
-			baseURL:     *baseURL,
-			sessionPath: *session,
-			sess:        sess,
-			email:       *email,
-			openBrowser: !*noBrowser,
-		})
+		return runGUI(gui.Config{
+			BaseURL:     *baseURL,
+			Addr:        *addr,
+			SessionPath: *session,
+			Session:     gui.LoadSession(*session),
+			Email:       *email,
+		}, !*noBrowser)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), *timeout)
@@ -135,7 +131,7 @@ func run(args []string) error {
 	ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	sess := loadSession(*session)
+	sess := gui.LoadSession(*session)
 	if *email == "" {
 		*email = sess.Email
 	}
@@ -165,7 +161,7 @@ func run(args []string) error {
 			return err
 		}
 		sess.Email, sess.Token = *email, c.Token()
-		if err := saveSession(*session, sess); err != nil {
+		if err := gui.SaveSession(*session, sess); err != nil {
 			fmt.Fprintln(os.Stderr, "warning: could not save session:", err)
 		}
 		return nil
@@ -237,13 +233,6 @@ func run(args []string) error {
 	return err
 }
 
-// session is the login state persisted between runs.
-type session struct {
-	Email    string `json:"email"`
-	Token    string `json:"token"`
-	ClientID string `json:"clientId"`
-}
-
 // defaultSessionPath returns the session file location in the user config
 // directory, or "" (sessions disabled) if there is none.
 func defaultSessionPath() string {
@@ -252,47 +241,6 @@ func defaultSessionPath() string {
 		return ""
 	}
 	return filepath.Join(dir, "franklinwh", "session.json")
-}
-
-// loadSession reads the session file. A missing or unreadable file yields an
-// empty session.
-func loadSession(path string) session {
-	var s session
-	if path == "" {
-		return s
-	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		if !errors.Is(err, os.ErrNotExist) {
-			fmt.Fprintln(os.Stderr, "warning: reading session:", err)
-		}
-		return s
-	}
-	if err := json.Unmarshal(data, &s); err != nil {
-		fmt.Fprintln(os.Stderr, "warning: ignoring corrupt session file:", err)
-		return session{}
-	}
-	return s
-}
-
-// saveSession writes the session file, readable only by the user since it
-// holds a login token.
-func saveSession(path string, s session) error {
-	if path == "" {
-		return nil
-	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		return err
-	}
-	data, err := json.MarshalIndent(s, "", "  ")
-	if err != nil {
-		return err
-	}
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, append(data, '\n'), 0o600); err != nil {
-		return err
-	}
-	return os.Rename(tmp, path)
 }
 
 func envOr(key, def string) string {

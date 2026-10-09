@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Energy Dashboard</string>
+    <string name="start_failed">Could not start the dashboard: %1$s</string>
+</resources>
