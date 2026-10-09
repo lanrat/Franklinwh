@@ -16,6 +16,11 @@ import (
 // missing, invalid or expired login token. Log in again to recover.
 var ErrUnauthorized = errors.New("franklinwh: not logged in or token expired")
 
+// ErrRateLimited is matched (with errors.Is) by errors caused by the server
+// rejecting a request as too frequent ("Too Many Requests"). Wait and retry
+// less often.
+var ErrRateLimited = errors.New("franklinwh: rate limited by the server")
+
 // codeOK is the "code" of a successful response.
 const codeOK = 200
 
@@ -50,10 +55,17 @@ func (e *Error) Error() string {
 }
 
 // Is makes errors.Is(err, ErrUnauthorized) true for authentication
-// failures. The app treats HTTP 401 / code 401 as an invalid token.
+// failures (the app treats HTTP 401 / code 401 as an invalid token) and
+// errors.Is(err, ErrRateLimited) true for HTTP 429 / code 429. The server
+// usually reports both with HTTP 200 and the code in the body.
 func (e *Error) Is(target error) bool {
-	return target == ErrUnauthorized &&
-		(e.HTTPStatus == http.StatusUnauthorized || e.Code == http.StatusUnauthorized)
+	switch target {
+	case ErrUnauthorized:
+		return e.HTTPStatus == http.StatusUnauthorized || e.Code == http.StatusUnauthorized
+	case ErrRateLimited:
+		return e.HTTPStatus == http.StatusTooManyRequests || e.Code == http.StatusTooManyRequests
+	}
+	return false
 }
 
 // request describes one API call.

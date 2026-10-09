@@ -265,6 +265,10 @@ GET /hes-gateway/terminal/getDeviceCompositeInfo?gatewayId=<ID>&refreshFlag=1
 - **`refreshFlag`** — `1` asks the cloud to pull fresh data from the gateway;
   `0` returns the last cached values.
 
+Polled too often (or from several clients on one account at once), the server
+answers HTTP 200 with `{"code":429,"message":"Too Many Requests"}`. Back off
+and retry; the library reports it as `ErrRateLimited`.
+
 `result`:
 
 ```json

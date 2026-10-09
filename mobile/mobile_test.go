@@ -251,13 +251,15 @@ func TestErrorKinds(t *testing.T) {
 		case 401:
 			w.WriteHeader(http.StatusUnauthorized)
 			io.WriteString(w, `{"code":401,"message":"token invalid"}`)
+		case 429:
+			io.WriteString(w, `{"code":429,"message":"Too Many Requests","success":false}`)
 		case 500:
 			io.WriteString(w, `{"code":500,"message":"boom","success":false}`)
 		default:
 			io.WriteString(w, `{"code":200,"success":true,"result":[]}`)
 		}
 	})
-	for code, want := range map[int32]string{401: ErrKindUnauthorized, 500: ErrKindAPI, 200: ErrKindNoGateways} {
+	for code, want := range map[int32]string{401: ErrKindUnauthorized, 429: ErrKindRateLimited, 500: ErrKindAPI, 200: ErrKindNoGateways} {
 		status.Store(code)
 		_, err := c.Status("")
 		if got := ErrorKind(errString(err)); got != want {

@@ -275,3 +275,22 @@ func TestPreferredMFA(t *testing.T) {
 		}
 	}
 }
+
+func TestRateLimited(t *testing.T) {
+	for _, tc := range []struct {
+		status int
+		body   string
+	}{
+		{http.StatusOK, `{"code":429,"message":"Too Many Requests","success":false}`},
+		{http.StatusTooManyRequests, `rate limited`},
+	} {
+		c, _ := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(tc.status)
+			io.WriteString(w, tc.body)
+		})
+		_, err := c.Gateways(context.Background())
+		if !errors.Is(err, ErrRateLimited) || errors.Is(err, ErrUnauthorized) {
+			t.Errorf("http %d %s: err = %v, want ErrRateLimited only", tc.status, tc.body, err)
+		}
+	}
+}

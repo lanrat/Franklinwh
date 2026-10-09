@@ -390,6 +390,10 @@ func (s *Server) apiError(w http.ResponseWriter, err error) {
 		writeJSON(w, http.StatusUnauthorized, map[string]any{"error": "not logged in", "needLogin": true})
 		return
 	}
+	if errors.Is(err, franklinwh.ErrRateLimited) {
+		writeJSON(w, http.StatusTooManyRequests, map[string]any{"error": "FranklinWH is rate-limiting requests", "rateLimited": true})
+		return
+	}
 	writeErr(w, http.StatusBadGateway, err.Error())
 }
 

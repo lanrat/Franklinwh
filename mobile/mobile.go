@@ -37,6 +37,9 @@ const (
 	// ErrKindUnauthorized means the token is missing, invalid or expired:
 	// show the login screen.
 	ErrKindUnauthorized = "unauthorized"
+	// ErrKindRateLimited means the server rejected the call as too
+	// frequent: wait, then poll less often.
+	ErrKindRateLimited = "rate_limited"
 	// ErrKindNetwork means the server could not be reached or timed out.
 	ErrKindNetwork = "network"
 	// ErrKindAPI means the server rejected the request.
@@ -371,7 +374,7 @@ func ErrorKind(message string) string {
 		return ErrKindOther
 	}
 	switch kind {
-	case ErrKindUnauthorized, ErrKindNetwork, ErrKindAPI, ErrKindInvalid,
+	case ErrKindUnauthorized, ErrKindRateLimited, ErrKindNetwork, ErrKindAPI, ErrKindInvalid,
 		ErrKindNoGateways, ErrKindCanceled, ErrKindOther:
 		return kind
 	}
@@ -400,6 +403,8 @@ func wrap(err error) error {
 	switch {
 	case errors.Is(err, franklinwh.ErrUnauthorized):
 		kind = ErrKindUnauthorized
+	case errors.Is(err, franklinwh.ErrRateLimited):
+		kind = ErrKindRateLimited
 	case errors.Is(err, franklinwh.ErrNoGateways):
 		kind = ErrKindNoGateways
 	case errors.Is(err, context.Canceled):
