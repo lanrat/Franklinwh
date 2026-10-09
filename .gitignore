@@ -6,6 +6,11 @@
 # Test / build output
 *.out
 *.test
+/dist/
+
+# gomobile output (scripts/build-aar.sh)
+*.aar
+*-sources.jar
 
 # Editor / OS
 .DS_Store

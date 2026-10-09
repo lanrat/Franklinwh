@@ -177,6 +177,21 @@ go build ./...
 Tests run against an in-process fake server and do not need an account or
 network access.
 
+### Android library
+
+`mobile/` is a [gomobile](https://pkg.go.dev/golang.org/x/mobile/cmd/gomobile)
+facade over the library for the planned Android app
+([docs/ANDROID_PORT.md](docs/ANDROID_PORT.md)). Its methods return JSON
+documents described by `mobile/schema`. To build the AAR (needs a JDK, the
+Android SDK and NDK):
+
+```sh
+scripts/build-aar.sh            # writes android/app/libs/franklinwh.aar
+```
+
+The Java classes are in `com.github.lanrat.franklinwh.mobile`; CI builds the
+AAR on every push.
+
 ## Disclaimer
 
 Provided as-is for interoperability with hardware you own. Names and trademarks

@@ -69,66 +69,64 @@ franklinwh/                 (existing Go module)
             └── App.kt, MainActivity.kt
 ```
 
-### 3.1 Go: small library refactors first (they help every frontend)
+### 3.1 Go: small library refactors first (done)
 
-- **Move the grid update logic into the library.** `gui.go:handleGrid` and
-  `main.go:cmdGrid` both do read → validate ≥ 0 → set `GridLimitLimited` →
-  write → re-read. Add
-  `func (c *Client) UpdateGridLimits(ctx, gatewayID string, importKW, exportKW *float64) (*GridLimits, error)`
-  and use it from both the CLI and the GUI. Android then calls one method.
-- **Add a `DefaultGateway(ctx)` helper.** `resolveGateway` is currently
-  duplicated in `main.go` and `gui.go`.
-- **Pick the MFA method in one place.** Move the "`MFAMethod`, otherwise
-  `AvailableMFA[0]`" rule out of `gui.go` into a `LoginResult.PreferredMFA()`
-  method.
+- **Grid update logic is in the library.** `GridLimits.Apply(importKW, exportKW *float64)`
+  validates ≥ 0 and sets `GridLimitLimited`. `Client.UpdateGridLimits` reads,
+  applies, writes, re-reads, and returns `ErrGridLimitsNotApplied` when the
+  server keeps the old values. The CLI and the GUI both use them.
+- **`Client.DefaultGateway(ctx)`** returns the first gateway and the total
+  count. It replaces the copies of `resolveGateway` in `main.go` and `gui.go`.
+- **`LoginResult.PreferredMFA()`** picks `MFAMethod`, or else
+  `AvailableMFA[0]`.
 
-### 3.2 Go: the `mobile` facade package
+### 3.2 Go: the `mobile` facade package (done)
 
 Gomobile only exports signed ints, floats, `string`, `bool`, `[]byte`, and
 structs or interfaces built from those. It cannot export `context.Context`,
 slices of structs, maps, or `json.Number`. The facade therefore stays thin and
-**exchanges JSON strings** for anything structured. Kotlin decodes them with
-kotlinx.serialization, and that seam is easy to test from both sides.
+**exchanges JSON strings** for anything structured. The documents are defined
+in `mobile/schema`, a separate package so that gobind doesn't try to bind
+them. Kotlin mirrors them as kotlinx.serialization data classes.
 
-```go
-package mobile
+The Java API that gobind generates (package `com.github.lanrat.franklinwh.mobile`):
 
-type Client struct{ c *franklinwh.Client }
+```java
+Config cfg = new Config();          // all optional: BaseURL, Token, ClientID,
+cfg.setToken(saved);                // DeviceModel, DeviceName, OSVersion,
+Client c = new Client(cfg);         // Language, TimeoutSeconds (default 45)
 
-// NewClient: token/clientID may be "" (fresh install). deviceModel/osVersion
-// come from android.os.Build so the server sees a sensible optDevice.
-func NewClient(baseURL, token, clientID, deviceModel, deviceName, osVersion string) *Client
+c.token(); c.setToken(t); c.clientID();   // persist token + clientID
+c.cancel();                               // abort calls in flight
 
-func (m *Client) Token() string
-func (m *Client) ClientID() string
+String login(email, password, timezone)   // schema.LoginResult {mfaRequired, mfaToken, method, methods, maskedEmail}
+void   sendEmailOTP(mfaToken)
+void   verifyMFA(mfaToken, method, code, remember)
+void   logout()
 
-// Login returns JSON: {"ok":true} or {"mfaRequired":true,"mfaToken":..,"method":..,"methods":[..],"maskedEmail":..}
-func (m *Client) Login(email, password, timezone string) (string, error)
-func (m *Client) SendEmailOTP(mfaToken string) error
-func (m *Client) VerifyMFA(mfaToken, method, code string, remember bool) error
-func (m *Client) Logout() error
+String gateways()                         // [schema.Gateway]
+String status(gatewayID)                  // schema.Status ("" = first gateway)
+String rawStatus(gatewayID)               // unmodified getDeviceCompositeInfo result
+String gridLimits(gatewayID)              // schema.GridLimits
+String updateGridLimits(gatewayID, importKW, exportKW)  // Double.NaN = unchanged; result has "applied"
 
-func (m *Client) GatewaysJSON() (string, error)           // []Gateway
-func (m *Client) StatusJSON(gatewayID string) (string, error)   // Status minus Raw (or with Raw for a debug screen)
-func (m *Client) GridLimitsJSON(gatewayID string) (string, error) // gridView shape from gui.go
-// Pass a negative value for "leave unchanged" (gomobile has no *float64).
-func (m *Client) UpdateGridLimits(gatewayID string, importKW, exportKW float64) (string, error)
-
-// IsUnauthorized lets Kotlin map Go errors to a typed "session expired" state.
-func IsUnauthorized(err error) bool   // or: error strings prefixed "unauthorized:"
+Mobile.errorKind(exception.getMessage())  // Mobile.ErrKindUnauthorized, ErrKindNetwork, ...
 ```
 
 Notes:
 
-- **Blocking calls.** Every method blocks and uses an internal timeout of about
-  45 s (`context.WithTimeout`), the same value as `gui.go:reqCtx`. Kotlin calls
-  them on `Dispatchers.IO`. If we need cancellation later, we can return a
-  `Call` handle that has `Cancel()`.
+- **Blocking calls.** Every method blocks, with a per-call timeout. Kotlin calls
+  them on `Dispatchers.IO`. `cancel()` aborts everything in flight, for
+  example from `ViewModel.onCleared`.
 - **Errors.** Gomobile turns a Go `error` into a Java `Exception` and keeps only
-  the message, so `errors.Is` does not survive the crossing. Prefix the message
-  with a stable code (`unauthorized:`, `network:`, `api:`) and parse it in the
-  repository.
-- **Tests.** Write `mobile_test.go` against an `httptest` server, in the same
+  the message, so every message starts with a stable kind (`unauthorized:`,
+  `network:`, `api:`, `invalid:`, `no_gateways:`, `canceled:`, `error:`), and
+  `Mobile.errorKind` parses it.
+- **Grid writes that don't take.** When the server accepts a change but reads
+  back the old limits, `updateGridLimits` returns them with
+  `"applied": false` rather than throwing, so the UI can show what the
+  gateway really has.
+- **Tests.** `mobile_test.go` runs against an `httptest` server, in the same
   way as `client_test.go`.
 
 ### 3.3 Android app
@@ -205,15 +203,18 @@ Add an `android` job to `.github/workflows/build.yml` that runs after `test`:
 Developers get the same steps through a `make android` target or a
 `scripts/build-aar.sh` script. The `.aar` is listed in `.gitignore`.
 
-Pin the `golang.org/x/mobile` version in `go.mod` with a `tools.go` file or a
-`tool` directive (Go 1.24 supports `go tool`), so CI and local builds match.
+`golang.org/x/mobile` is pinned in `go.mod` with `tool` directives, at the last
+commit that still supports Go 1.24. `scripts/build-aar.sh` installs gomobile
+and gobind from those versions; don't run `gomobile init`, which installs
+`gobind@latest`. CI already builds the AAR (the `android-aar` job). Phase 5
+adds the APK.
 
 ## 5. Phased plan
 
 | Phase | Deliverable | Done when |
 |---|---|---|
-| 0. Library prep | `UpdateGridLimits`, `DefaultGateway` and `PreferredMFA` in the library; the CLI and GUI switched to them | `go test ./...` passes, and the CLI and GUI behave as before |
-| 1. Go facade | The `mobile/` package and its tests, plus a local `gomobile bind` that produces an AAR | `go test ./mobile` passes, and the AAR builds for the 3 ABIs |
+| 0. Library prep ✅ | `UpdateGridLimits`, `DefaultGateway` and `PreferredMFA` in the library; the CLI and GUI switched to them | `go test ./...` passes, and the CLI and GUI behave as before |
+| 1. Go facade ✅ | The `mobile/` package and its tests, plus a local `gomobile bind` that produces an AAR | `go test ./mobile` passes, and the AAR builds for the 3 ABIs |
 | 2. App skeleton + auth | A Gradle project, `SessionStore`, and the Login and MFA screens | You can log in with real credentials (TOTP and email OTP), and the session survives an app restart |
 | 3. Dashboard | Status polling, the gateway picker, and session-expired handling | The values match `franklinwh status` and polling pauses in the background |
 | 4. Grid limits + settings | The read/write screen and logout | You can set and read back limits on a real gateway, and validation rejects negative values |
