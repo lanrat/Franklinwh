@@ -122,7 +122,6 @@ jobs:
       - name: Collect outputs
         run: |
           mkdir -p dist
-          cp android/app/libs/franklinwh.aar dist/franklinwh-android.aar
           if [ -n "$RELEASE_VERSION" ]; then
             apk=android/app/build/outputs/apk/release/app-release.apk
             # Fail unless the APK is signed, and not with a debug key.

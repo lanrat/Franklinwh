@@ -216,8 +216,8 @@ Developers get the same steps through a `make android` target or a
 `golang.org/x/mobile` is pinned in `go.mod` with `tool` directives, at the last
 commit that still supports Go 1.24. `scripts/build-aar.sh` installs gomobile
 and gobind from those versions; don't run `gomobile init`, which installs
-`gobind@latest`. CI already builds the AAR (the `android-aar` job). Phase 5
-adds the APK.
+`gobind@latest`. The `android` CI job builds the AAR and then the APK. Only
+the APK is published; the AAR is just an intermediate build step.
 
 ## 5. Phased plan
 
