@@ -3,13 +3,18 @@ package com.github.lanrat.franklinwh.app
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Intent
+import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import android.view.ViewGroup
+import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.view.WindowInsets
+import android.view.WindowInsetsController
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.FrameLayout
 import android.widget.TextView
 import com.github.lanrat.franklinwh.mobile.Mobile
 
@@ -35,16 +40,26 @@ class MainActivity : Activity() {
                 return true
             }
         }
+        // The WebView ignores its own padding, so it sits in a container that
+        // is padded to keep the page clear of the status and navigation bars
+        // and the keyboard (Android 15 draws apps edge to edge). The
+        // container shows through behind the bars, so it matches the page's
+        // white header; the page is always light because the app theme is.
+        val root = FrameLayout(this)
+        root.setBackgroundColor(Color.WHITE)
+        root.addView(web, ViewGroup.LayoutParams(MATCH_PARENT, MATCH_PARENT))
         if (Build.VERSION.SDK_INT >= 30) {
-            // Android 15 draws apps edge to edge; keep the page clear of the
-            // status and navigation bars and the keyboard.
-            web.setOnApplyWindowInsetsListener { v, insets ->
+            root.setOnApplyWindowInsetsListener { v, insets ->
                 val bars = insets.getInsets(WindowInsets.Type.systemBars() or WindowInsets.Type.ime())
                 v.setPadding(bars.left, bars.top, bars.right, bars.bottom)
                 WindowInsets.CONSUMED
             }
+            // Dark status and navigation bar icons on the white background.
+            val light = WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or
+                WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS
+            window.insetsController?.setSystemBarsAppearance(light, light)
         }
-        setContentView(web)
+        setContentView(root)
 
         val deviceName = Settings.Global.getString(contentResolver, Settings.Global.DEVICE_NAME) ?: ""
         Thread {
@@ -53,7 +68,8 @@ class MainActivity : Activity() {
                 runOnUiThread { web.loadUrl(url) }
             } catch (e: Exception) {
                 runOnUiThread {
-                    setContentView(TextView(this).apply {
+                    root.removeAllViews()
+                    root.addView(TextView(this).apply {
                         text = getString(R.string.start_failed, e.message)
                         setPadding(48, 48, 48, 48)
                     })
