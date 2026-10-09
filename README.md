@@ -181,7 +181,7 @@ network access.
 
 `android/` is a minimal Android app that shows the same dashboard as the
 desktop GUI in a WebView: the Go library runs the dashboard server inside the
-app on a random loopback port. It needs Android 8.0 (API 26) or newer. CI
+app on a random loopback port. It needs Android 13 (API 33) or newer. CI
 builds a debug-signed APK on every push (the `franklinwh-android` artifact).
 
 To build it yourself (needs a JDK 17, the Android SDK and NDK):

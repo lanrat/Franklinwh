@@ -142,7 +142,8 @@ Notes:
 - **Stack.** Kotlin, Jetpack Compose with Material 3 (dynamic color and dark
   mode for free), a ViewModel and StateFlow per screen, and Navigation-Compose.
   Use Hilt or plain manual DI; the app is small, so manual DI is fine.
-- **minSdk 26, targetSdk the current release.** Build only `arm64-v8a`: the
+- **minSdk 33 (Android 13, what the Pixel 7 shipped with), targetSdk the
+  current release.** Build only `arm64-v8a`: the
   supported phones are the Pixel 7 and newer, which are 64-bit ARM only. Use
   an arm64 emulator image, or set `TARGETS=android/arm64,android/amd64` to
   add x86_64.
@@ -203,7 +204,7 @@ Add an `android` job to `.github/workflows/build.yml` that runs after `test`:
 2. Run `go install golang.org/x/mobile/cmd/gomobile@<pinned>` and then
    `gomobile init`.
 3. Run
-   `gomobile bind -target=android/arm64 -androidapi 26 -trimpath -ldflags="-s -w" -o android/app/libs/franklinwh.aar ./mobile`.
+   `gomobile bind -target=android/arm64 -androidapi 33 -trimpath -ldflags="-s -w" -o android/app/libs/franklinwh.aar ./mobile`.
 4. Run `./gradlew :app:testDebugUnitTest :app:assembleRelease` (or
    `bundleRelease`).
 5. On `v*` tags, sign the APK with a keystore stored in repo secrets and attach

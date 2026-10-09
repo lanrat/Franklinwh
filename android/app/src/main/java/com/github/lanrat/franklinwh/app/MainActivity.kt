@@ -48,17 +48,15 @@ class MainActivity : Activity() {
         val root = FrameLayout(this)
         root.setBackgroundColor(Color.WHITE)
         root.addView(web, ViewGroup.LayoutParams(MATCH_PARENT, MATCH_PARENT))
-        if (Build.VERSION.SDK_INT >= 30) {
-            root.setOnApplyWindowInsetsListener { v, insets ->
-                val bars = insets.getInsets(WindowInsets.Type.systemBars() or WindowInsets.Type.ime())
-                v.setPadding(bars.left, bars.top, bars.right, bars.bottom)
-                WindowInsets.CONSUMED
-            }
-            // Dark status and navigation bar icons on the white background.
-            val light = WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or
-                WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS
-            window.insetsController?.setSystemBarsAppearance(light, light)
+        root.setOnApplyWindowInsetsListener { v, insets ->
+            val bars = insets.getInsets(WindowInsets.Type.systemBars() or WindowInsets.Type.ime())
+            v.setPadding(bars.left, bars.top, bars.right, bars.bottom)
+            WindowInsets.CONSUMED
         }
+        // Dark status and navigation bar icons on the white background.
+        val light = WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or
+            WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS
+        window.insetsController?.setSystemBarsAppearance(light, light)
         setContentView(root)
 
         val deviceName = Settings.Global.getString(contentResolver, Settings.Global.DEVICE_NAME) ?: ""

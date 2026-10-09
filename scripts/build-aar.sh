@@ -18,7 +18,7 @@ set -euo pipefail
 root=$(cd "$(dirname "$0")/.." && pwd)
 out=${1:-$root/android/app/libs/franklinwh.aar}
 targets=${TARGETS:-android/arm64}
-androidapi=${ANDROID_API:-26}
+androidapi=${ANDROID_API:-33}
 
 cd "$root"
 bin=$(mktemp -d)

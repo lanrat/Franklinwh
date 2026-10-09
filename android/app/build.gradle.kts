@@ -15,7 +15,7 @@ android {
 
     defaultConfig {
         applicationId = "com.github.lanrat.franklinwh.app"
-        minSdk = 26 // matches -androidapi in scripts/build-aar.sh
+        minSdk = 33 // Android 13; matches -androidapi in scripts/build-aar.sh
         targetSdk = 35
         versionCode = 2
         versionName = "0.2.0"

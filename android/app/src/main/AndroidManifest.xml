@@ -3,8 +3,8 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
 
-    <!-- Keep the saved login token out of backups and device transfers:
-         allowBackup for Android 8-11, dataExtractionRules for 12+. -->
+    <!-- Keep the saved login token out of backups and device transfers
+         (dataExtractionRules; allowBackup also covers adb backup). -->
     <application
         android:allowBackup="false"
         android:dataExtractionRules="@xml/data_extraction_rules"
