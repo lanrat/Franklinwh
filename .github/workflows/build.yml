@@ -3,14 +3,21 @@ name: build
 # Builds the franklinwh CLI for Linux and Windows (x64) and the Android app.
 # Runs on pushes to the default branch, on pull requests, on version tags,
 # and on demand.
-# Pushing a tag like v0.1.0 also publishes the binaries and the APK to a
-# GitHub Release.
+# A release (the binaries and the APK on a GitHub Release) is published by
+# either pushing a tag like v0.1.0, or running this workflow from the Actions
+# tab ("Run workflow") on main with a version: that builds main, then tags the
+# built commit and publishes the release.
 on:
   push:
     branches: [main, master]
     tags: ['v*']
   pull_request:
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version to tag and publish, e.g. v0.2.0 (leave empty to only build)'
+        required: false
+        default: ''
 
 permissions:
   contents: read
@@ -103,11 +110,35 @@ jobs:
 
   release:
     needs: [build, android]
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.version != '')
     runs-on: ubuntu-latest
     permissions:
-      contents: write # create the release and upload the binaries
+      contents: write # create the tag and release and upload the binaries
     steps:
+      - name: Choose tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          if [ "$EVENT" != workflow_dispatch ]; then
+            echo "TAG=${GITHUB_REF_NAME}" >> "$GITHUB_ENV"
+            exit 0
+          fi
+          # Run from the Actions tab: release main under a new version tag.
+          if [ "$GITHUB_REF" != refs/heads/main ]; then
+            echo "::error::Run the workflow on main to publish a release (got $GITHUB_REF)"
+            exit 1
+          fi
+          if ! printf '%s' "$VERSION" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::version must look like v1.2.3 (got '$VERSION')"
+            exit 1
+          fi
+          if gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${VERSION}" >/dev/null 2>&1; then
+            echo "::error::tag $VERSION already exists"
+            exit 1
+          fi
+          echo "TAG=${VERSION}" >> "$GITHUB_ENV"
       - name: Download build artifacts
         uses: actions/download-artifact@v8
         with:
@@ -117,7 +148,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "${GITHUB_REF_NAME}" dist/* \
+          # --target creates the tag on the built commit when it does not
+          # exist yet (a release started from the Actions tab).
+          gh release create "$TAG" dist/* \
             --repo "${GITHUB_REPOSITORY}" \
-            --title "${GITHUB_REF_NAME}" \
+            --target "${GITHUB_SHA}" \
+            --title "$TAG" \
             --generate-notes

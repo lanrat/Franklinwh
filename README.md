@@ -197,6 +197,13 @@ package the app is built from. Besides `StartServer`, it offers a native API
 whose methods return JSON documents described by `mobile/schema`, for a future
 native UI ([docs/ANDROID_PORT.md](docs/ANDROID_PORT.md)).
 
+### Releasing
+
+Either push a tag (`git tag v1.2.3 && git push origin v1.2.3`), or open
+**Actions → build → Run workflow** on `main` and enter the version. Both build
+and test everything, then publish a GitHub Release with the Linux and Windows
+binaries and the Android APK; the second also creates the tag.
+
 ## Disclaimer
 
 Provided as-is for interoperability with hardware you own. Names and trademarks
