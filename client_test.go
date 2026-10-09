@@ -238,3 +238,40 @@ func TestDoArbitraryEndpoint(t *testing.T) {
 		t.Errorf("offgridState = %d", out.OffgridState)
 	}
 }
+
+func TestDefaultGateway(t *testing.T) {
+	list := sampleGatewayList
+	c, _ := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		io.WriteString(w, list)
+	})
+	gw, total, err := c.DefaultGateway(context.Background())
+	if err != nil || gw.ID != "10050001A02F22020077" || total != 1 {
+		t.Errorf("DefaultGateway = %+v, %d, %v", gw, total, err)
+	}
+
+	list = `{"code":200,"success":true,"result":[{"id":"A"},{"id":"B"}]}`
+	gw, total, err = c.DefaultGateway(context.Background())
+	if err != nil || gw.ID != "A" || total != 2 {
+		t.Errorf("DefaultGateway = %+v, %d, %v", gw, total, err)
+	}
+
+	list = `{"code":200,"success":true,"result":[]}`
+	if _, _, err := c.DefaultGateway(context.Background()); !errors.Is(err, ErrNoGateways) {
+		t.Errorf("err = %v, want ErrNoGateways", err)
+	}
+}
+
+func TestPreferredMFA(t *testing.T) {
+	for _, tc := range []struct {
+		r    LoginResult
+		want string
+	}{
+		{LoginResult{MFAMethod: MFATOTP, AvailableMFA: []string{MFAEmailOTP, MFATOTP}}, MFATOTP},
+		{LoginResult{AvailableMFA: []string{MFAEmailOTP, MFATOTP}}, MFAEmailOTP},
+		{LoginResult{}, ""},
+	} {
+		if got := tc.r.PreferredMFA(); got != tc.want {
+			t.Errorf("PreferredMFA(%+v) = %q, want %q", tc.r, got, tc.want)
+		}
+	}
+}

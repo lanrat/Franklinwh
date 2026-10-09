@@ -325,10 +325,7 @@ func doLogin(ctx context.Context, c *franklinwh.Client, email string, password *
 	}
 
 	// MFA required.
-	method := res.MFAMethod
-	if method == "" && len(res.AvailableMFA) > 0 {
-		method = res.AvailableMFA[0]
-	}
+	method := res.PreferredMFA()
 	if method == franklinwh.MFAEmailOTP {
 		if err := c.SendEmailOTP(ctx, res.MFAToken); err != nil {
 			return fmt.Errorf("sending email OTP: %w", err)
@@ -412,11 +409,16 @@ func cmdGrid(ctx context.Context, c *franklinwh.Client, gateway, imp, exp string
 		return nil
 	}
 
-	before := *l
-	if err := parseLimit("import", imp, &l.ImportKW, &l.ImportFlag); err != nil {
+	impKW, err := parseLimit("import", imp)
+	if err != nil {
 		return err
 	}
-	if err := parseLimit("export", exp, &l.ExportKW, &l.ExportFlag); err != nil {
+	expKW, err := parseLimit("export", exp)
+	if err != nil {
+		return err
+	}
+	before := *l
+	if err := l.Apply(impKW, expKW); err != nil {
 		return err
 	}
 	fmt.Println("Current:")
@@ -427,33 +429,25 @@ func cmdGrid(ctx context.Context, c *franklinwh.Client, gateway, imp, exp string
 		fmt.Println("(dry run, nothing sent)")
 		return nil
 	}
-	if err := c.SetGridLimits(ctx, id, l); err != nil {
-		return err
+	after, err := c.UpdateGridLimits(ctx, id, impKW, expKW)
+	if after != nil {
+		fmt.Println("Saved; the gateway now reports:")
+		printGridLimits(after)
 	}
-	after, err := c.GridLimits(ctx, id)
-	if err != nil {
-		return fmt.Errorf("limits sent, but re-reading them failed: %w", err)
-	}
-	fmt.Println("Saved; the gateway now reports:")
-	printGridLimits(after)
-	if after.ImportKW != l.ImportKW || after.ExportKW != l.ExportKW {
-		return errors.New("the server accepted the request but the limits did not change")
-	}
-	return nil
+	return err
 }
 
-// parseLimit sets *kw from a kW value. An empty value leaves the limit
-// unchanged. Setting a value turns the limit on (flag GridLimitLimited).
-func parseLimit(name, v string, kw *float64, flagVal *int) error {
+// parseLimit parses a kW value for GridLimits.Apply. An empty value returns
+// nil, leaving the limit unchanged.
+func parseLimit(name, v string) (*float64, error) {
 	if v == "" {
-		return nil
+		return nil, nil
 	}
 	f, err := strconv.ParseFloat(v, 64)
 	if err != nil || f < 0 {
-		return fmt.Errorf("-%s: want a non-negative number of kW, got %q", name, v)
+		return nil, fmt.Errorf("-%s: want a non-negative number of kW, got %q", name, v)
 	}
-	*kw, *flagVal = f, franklinwh.GridLimitLimited
-	return nil
+	return &f, nil
 }
 
 func printGridLimits(l *franklinwh.GridLimits) {
@@ -474,17 +468,14 @@ func resolveGateway(ctx context.Context, c *franklinwh.Client, gateway string) (
 	if gateway != "" {
 		return gateway, nil
 	}
-	gws, err := c.Gateways(ctx)
+	gw, total, err := c.DefaultGateway(ctx)
 	if err != nil {
 		return "", err
 	}
-	if len(gws) == 0 {
-		return "", errors.New("no gateways on this account")
+	if total > 1 {
+		fmt.Fprintf(os.Stderr, "note: %d gateways found, using %s; pass -gateway to choose\n", total, gw.ID)
 	}
-	if len(gws) > 1 {
-		fmt.Fprintf(os.Stderr, "note: %d gateways found, using %s; pass -gateway to choose\n", len(gws), gws[0].ID)
-	}
-	return gws[0].ID, nil
+	return gw.ID, nil
 }
 
 func printStatus(st *franklinwh.Status) {

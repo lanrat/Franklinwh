@@ -56,6 +56,18 @@ type LoginResult struct {
 	LockSeconds  int      `json:"lockSeconds"`
 }
 
+// PreferredMFA returns the MFA method to offer first: the account's default
+// method, or else the first available one. It is "" when none is known.
+func (r *LoginResult) PreferredMFA() string {
+	if r.MFAMethod != "" {
+		return r.MFAMethod
+	}
+	if len(r.AvailableMFA) > 0 {
+		return r.AvailableMFA[0]
+	}
+	return ""
+}
+
 // LoginOptions tunes a login request. The zero value logs a homeowner in
 // with no CAPTCHA.
 type LoginOptions struct {

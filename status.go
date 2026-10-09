@@ -2,8 +2,12 @@ package franklinwh
 
 import (
 	"context"
+	"errors"
 	"net/url"
 )
+
+// ErrNoGateways is returned by DefaultGateway when the account has none.
+var ErrNoGateways = errors.New("franklinwh: no gateways on this account")
 
 // Gateway is one aGate device on the account, as returned by Gateways.
 type Gateway struct {
@@ -34,6 +38,20 @@ func (c *Client) Gateways(ctx context.Context) ([]Gateway, error) {
 		return nil, err
 	}
 	return out, nil
+}
+
+// DefaultGateway returns the gateway to use when the caller has not chosen
+// one: the first on the account. total is the number of gateways found, so
+// callers can mention that others exist.
+func (c *Client) DefaultGateway(ctx context.Context) (gw Gateway, total int, err error) {
+	gws, err := c.Gateways(ctx)
+	if err != nil {
+		return Gateway{}, 0, err
+	}
+	if len(gws) == 0 {
+		return Gateway{}, 0, ErrNoGateways
+	}
+	return gws[0], len(gws), nil
 }
 
 // DeviceCompositeInfo is the full response of getDeviceCompositeInfo: the

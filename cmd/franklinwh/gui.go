@@ -180,10 +180,7 @@ func (s *guiServer) handleLogin(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	res, err := s.client.Login(ctx, req.Email, req.Password, nil)
 	if errors.Is(err, franklinwh.ErrMFARequired) {
-		method := res.MFAMethod
-		if method == "" && len(res.AvailableMFA) > 0 {
-			method = res.AvailableMFA[0]
-		}
+		method := res.PreferredMFA()
 		writeJSON(w, http.StatusOK, map[string]any{
 			"mfaRequired": true,
 			"mfaToken":    res.MFAToken,
@@ -313,30 +310,11 @@ func (s *guiServer) handleGrid(w http.ResponseWriter, r *http.Request) {
 			s.apiError(w, err)
 			return
 		}
-		l, err := s.client.GridLimits(ctx, id)
-		if err != nil {
-			s.apiError(w, err)
+		if (req.Import != nil && *req.Import < 0) || (req.Export != nil && *req.Export < 0) {
+			writeErr(w, http.StatusBadRequest, "limits must not be negative")
 			return
 		}
-		if req.Import != nil {
-			if *req.Import < 0 {
-				writeErr(w, http.StatusBadRequest, "import limit must not be negative")
-				return
-			}
-			l.ImportKW, l.ImportFlag = *req.Import, franklinwh.GridLimitLimited
-		}
-		if req.Export != nil {
-			if *req.Export < 0 {
-				writeErr(w, http.StatusBadRequest, "export limit must not be negative")
-				return
-			}
-			l.ExportKW, l.ExportFlag = *req.Export, franklinwh.GridLimitLimited
-		}
-		if err := s.client.SetGridLimits(ctx, id, l); err != nil {
-			s.apiError(w, err)
-			return
-		}
-		after, err := s.client.GridLimits(ctx, id)
+		after, err := s.client.UpdateGridLimits(ctx, id, req.Import, req.Export)
 		if err != nil {
 			s.apiError(w, err)
 			return
@@ -372,14 +350,11 @@ func (s *guiServer) resolveGateway(ctx context.Context, id string) (string, erro
 	if id != "" {
 		return id, nil
 	}
-	gws, err := s.client.Gateways(ctx)
+	gw, _, err := s.client.DefaultGateway(ctx)
 	if err != nil {
 		return "", err
 	}
-	if len(gws) == 0 {
-		return "", errors.New("no gateways on this account")
-	}
-	return gws[0].ID, nil
+	return gw.ID, nil
 }
 
 // apiError maps a client error to an HTTP response, flagging an expired

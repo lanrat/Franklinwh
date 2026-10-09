@@ -114,3 +114,51 @@ func (c *Client) SetGridLimits(ctx context.Context, gatewayID string, l *GridLim
 	})
 	return err
 }
+
+// ErrGridLimitsNotApplied is returned by UpdateGridLimits when the server
+// accepts the change but reports the old limits when read back.
+var ErrGridLimitsNotApplied = errors.New("franklinwh: the server accepted the grid limits but they did not change")
+
+// Apply sets new limits in l. A nil value leaves that limit unchanged; a
+// non-nil one must not be negative and turns the limit on
+// (GridLimitLimited). l is not modified when an error is returned.
+func (l *GridLimits) Apply(importKW, exportKW *float64) error {
+	if importKW != nil && *importKW < 0 {
+		return errors.New("franklinwh: import limit must not be negative")
+	}
+	if exportKW != nil && *exportKW < 0 {
+		return errors.New("franklinwh: export limit must not be negative")
+	}
+	if importKW != nil {
+		l.ImportKW, l.ImportFlag = *importKW, GridLimitLimited
+	}
+	if exportKW != nil {
+		l.ExportKW, l.ExportFlag = *exportKW, GridLimitLimited
+	}
+	return nil
+}
+
+// UpdateGridLimits reads a gateway's grid limits, applies the given values
+// (see GridLimits.Apply; nil leaves a limit unchanged), writes them, and
+// returns the limits read back from the server. If the server reports
+// different values afterwards it returns them with ErrGridLimitsNotApplied.
+func (c *Client) UpdateGridLimits(ctx context.Context, gatewayID string, importKW, exportKW *float64) (*GridLimits, error) {
+	l, err := c.GridLimits(ctx, gatewayID)
+	if err != nil {
+		return nil, err
+	}
+	if err := l.Apply(importKW, exportKW); err != nil {
+		return nil, err
+	}
+	if err := c.SetGridLimits(ctx, gatewayID, l); err != nil {
+		return nil, err
+	}
+	after, err := c.GridLimits(ctx, gatewayID)
+	if err != nil {
+		return nil, fmt.Errorf("franklinwh: limits sent, but re-reading them failed: %w", err)
+	}
+	if after.ImportKW != l.ImportKW || after.ExportKW != l.ExportKW {
+		return after, ErrGridLimitsNotApplied
+	}
+	return after, nil
+}
