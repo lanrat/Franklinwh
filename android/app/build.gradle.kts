@@ -9,6 +9,19 @@ if (!goAar.exists()) {
     throw GradleException("${goAar.path} is missing: run scripts/build-aar.sh first")
 }
 
+// Release signing comes from the environment (CI decodes it from GitHub
+// secrets; see scripts/android-keystore.md), so no key material lives in the
+// repository. Without it, assembleRelease produces an unsigned APK.
+val releaseKeystore = System.getenv("ANDROID_KEYSTORE_FILE")?.takeIf { it.isNotEmpty() }
+
+// CI passes the release version (-PappVersionName=0.2.1); versionCode is
+// derived from it (major*10000 + minor*100 + patch) so every release can
+// update the previous one.
+val appVersionName = (findProperty("appVersionName") as String?) ?: "0.2.0"
+val appVersionCode = appVersionName.split(".").map { it.toInt() }.let { (major, minor, patch) ->
+    major * 10000 + minor * 100 + patch
+}
+
 android {
     namespace = "com.github.lanrat.franklinwh.app"
     compileSdk = 35
@@ -17,13 +30,27 @@ android {
         applicationId = "com.github.lanrat.franklinwh.app"
         minSdk = 33 // Android 13; matches -androidapi in scripts/build-aar.sh
         targetSdk = 35
-        versionCode = 2
-        versionName = "0.2.0"
+        versionCode = appVersionCode
+        versionName = appVersionName
+    }
+
+    signingConfigs {
+        if (releaseKeystore != null) {
+            create("release") {
+                storeFile = file(releaseKeystore)
+                storePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("ANDROID_KEY_ALIAS")
+                keyPassword = System.getenv("ANDROID_KEY_PASSWORD")
+            }
+        }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = false
+            if (releaseKeystore != null) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
 

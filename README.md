@@ -182,7 +182,8 @@ network access.
 `android/` is a minimal Android app that shows the same dashboard as the
 desktop GUI in a WebView: the Go library runs the dashboard server inside the
 app on a random loopback port. It needs Android 13 (API 33) or newer. CI
-builds a debug-signed APK on every push (the `franklinwh-android` artifact).
+builds a debug-signed APK on every push (the `franklinwh-android` artifact);
+releases attach an APK signed with the permanent release key.
 
 To build it yourself (needs a JDK 17, the Android SDK and NDK):
 
@@ -203,6 +204,9 @@ Either push a tag (`git tag v1.2.3 && git push origin v1.2.3`), or open
 **Actions → build → Run workflow** on `main` and enter the version. Both build
 and test everything, then publish a GitHub Release with the Linux and Windows
 binaries and the Android APK; the second also creates the tag.
+Release APKs are signed with a permanent key kept in the repository's
+secrets; [scripts/android-keystore.md](scripts/android-keystore.md) explains
+the one-time setup. Without it, releases fail.
 
 ## Disclaimer
 

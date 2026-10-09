@@ -27,3 +27,7 @@ android/.gradle/
 android/build/
 android/app/build/
 android/local.properties
+
+# Signing keys (see scripts/android-keystore.md)
+*.jks
+*.keystore

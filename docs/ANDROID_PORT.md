@@ -228,7 +228,7 @@ adds the APK.
 | 2. App skeleton + auth (WebView; built, untested on device) | A Gradle project, `SessionStore`, and the Login and MFA screens | You can log in with real credentials (TOTP and email OTP), and the session survives an app restart |
 | 3. Dashboard | Status polling, the gateway picker, and session-expired handling | The values match `franklinwh status` and polling pauses in the background |
 | 4. Grid limits + settings | The read/write screen and logout | You can set and read back limits on a real gateway, and validation rejects negative values |
-| 5. CI + release | The Android job and a signed APK on tag | A tagged build publishes an APK |
+| 5. CI + release (signing ✅) | The Android job and a signed APK on tag | A tagged build publishes an APK |
 | 6. Extras (optional) | A widget, a QS tile, alerts and a debug screen | — |
 
 Phases 0–1 are Go-only and can merge on their own. Phases 2–4 are the bulk of

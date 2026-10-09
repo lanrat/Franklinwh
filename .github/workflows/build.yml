@@ -75,12 +75,17 @@ jobs:
           path: dist/*
           if-no-files-found: error
 
-  # Builds the Android app: the AAR from ./mobile with gomobile, then a
-  # debug-signed APK with Gradle. The runner image ships the Android SDK and
-  # NDK (ANDROID_HOME and ANDROID_NDK_HOME).
+  # Builds the Android app: the AAR from ./mobile with gomobile, then the APK
+  # with Gradle. Releases get a release APK signed with the permanent key
+  # from the repository secrets (see scripts/android-keystore.md), so each
+  # release installs over the last; other runs get a debug APK. The runner
+  # image ships the Android SDK and NDK (ANDROID_HOME and ANDROID_NDK_HOME).
   android:
     needs: test
     runs-on: ubuntu-latest
+    env:
+      # A release: a version tag push, or "Run workflow" with a version.
+      RELEASE_VERSION: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || (github.event_name == 'workflow_dispatch' && inputs.version || '') }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
@@ -93,14 +98,45 @@ jobs:
           java-version: '17'
       - name: Build AAR
         run: scripts/build-aar.sh
-      - name: Build APK
+      - name: Build debug APK
+        if: env.RELEASE_VERSION == ''
         working-directory: android
         run: ./gradlew --no-daemon :app:assembleDebug
+      - name: Build signed release APK
+        if: env.RELEASE_VERSION != ''
+        working-directory: android
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ] || [ -z "$ANDROID_KEYSTORE_PASSWORD" ] || [ -z "$ANDROID_KEY_ALIAS" ] || [ -z "$ANDROID_KEY_PASSWORD" ]; then
+            echo "::error::Release signing secrets are not set; see scripts/android-keystore.md"
+            exit 1
+          fi
+          export ANDROID_KEYSTORE_FILE="$RUNNER_TEMP/release.jks"
+          printf '%s' "$KEYSTORE_BASE64" | base64 -d > "$ANDROID_KEYSTORE_FILE"
+          ./gradlew --no-daemon :app:assembleRelease -PappVersionName="${RELEASE_VERSION#v}"
+          rm -f "$ANDROID_KEYSTORE_FILE"
       - name: Collect outputs
         run: |
           mkdir -p dist
-          cp android/app/build/outputs/apk/debug/app-debug.apk dist/franklinwh-android-debug.apk
           cp android/app/libs/franklinwh.aar dist/franklinwh-android.aar
+          if [ -n "$RELEASE_VERSION" ]; then
+            apk=android/app/build/outputs/apk/release/app-release.apk
+            # Fail unless the APK is signed, and not with a debug key.
+            apksigner=$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)apksigner
+            certs=$("$apksigner" verify --print-certs "$apk")
+            echo "$certs"
+            if ! grep -q 'Signer #1' <<<"$certs" || grep -q 'CN=Android Debug' <<<"$certs"; then
+              echo "::error::$apk is not signed with the release key"
+              exit 1
+            fi
+            cp "$apk" dist/franklinwh-android.apk
+          else
+            cp android/app/build/outputs/apk/debug/app-debug.apk dist/franklinwh-android-debug.apk
+          fi
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
