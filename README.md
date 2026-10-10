@@ -1,11 +1,11 @@
-# franklinwh
+# <img src="docs/images/icon.svg" alt="" width="48" height="48" align="top"> franklinwh
 
-An unofficial Go client, command-line tool, and local web dashboard for the
-**FranklinWH** cloud API — the service behind the FranklinWH app
+An unofficial Go client, command-line tool, local web dashboard and Android
+app for the **FranklinWH** cloud API — the service behind the FranklinWH app
 (`com.Franklinwh.FamilyEnergy`) that monitors aGate / aPower home energy
 systems. It lets you see your **battery**, **grid** and **solar** status, and
-read or set grid import/export limits, from a GUI, the command line, or your
-own scripts.
+read or set grid import/export limits, from a GUI, your phone, the command
+line, or your own scripts.
 
 The protocol was reverse engineered from version 2.23.0 of the Android app and
 is documented in **[docs/API.md](docs/API.md)**.
@@ -13,6 +13,19 @@ is documented in **[docs/API.md](docs/API.md)**.
 > ⚠️ **Unofficial & unsupported.** This is not affiliated with FranklinWH. The
 > API is undocumented and may change at any time. Use your own account, and
 > poll gently (the app itself refreshes only about every 10 seconds).
+
+## Screenshots
+
+The same dashboard runs in the Android app and, on the desktop, in your
+browser. It follows the system light/dark setting. (Shown with demo data.)
+
+<p>
+  <img src="docs/images/android-light.png" alt="Android app, light theme" width="240">
+  <img src="docs/images/android-dark.png" alt="Android app, dark theme" width="240">
+  <img src="docs/images/android-login.png" alt="Android app, sign-in screen" width="240">
+</p>
+
+<img src="docs/images/desktop.png" alt="Desktop dashboard in a browser" width="740">
 
 ## Install
 
@@ -26,6 +39,11 @@ go get github.com/lanrat/franklinwh
 
 Requires Go 1.24+. Pre-built Linux and Windows x64 binaries are attached to
 each [release](https://github.com/lanrat/franklinwh/releases).
+
+**Android:** download `franklinwh-android.apk` from the latest
+[release](https://github.com/lanrat/franklinwh/releases) and install it
+(Android 13+, 64-bit ARM: Pixel 7 or newer). It shows the dashboard and keeps
+you signed in; releases update in place.
 
 ## Desktop dashboard (GUI)
 
