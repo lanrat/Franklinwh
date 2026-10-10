@@ -46,6 +46,12 @@ android {
     }
 
     buildTypes {
+        debug {
+            // A separate app (com.vorsk.franklinwh.app.debug) that installs
+            // next to the release instead of conflicting with its signature.
+            applicationIdSuffix = ".debug"
+            versionNameSuffix = "-debug"
+        }
         release {
             isMinifyEnabled = false
             if (releaseKeystore != null) {

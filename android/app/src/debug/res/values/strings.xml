@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Debug builds are a separate app; label them so they can be told apart. -->
+    <string name="app_name">Energy Dashboard (debug)</string>
+</resources>
