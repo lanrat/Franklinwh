@@ -125,10 +125,13 @@ jobs:
           if [ -n "$RELEASE_VERSION" ]; then
             apk=android/app/build/outputs/apk/release/app-release.apk
             # Fail unless the APK is signed, and not with a debug key.
+            # verify exits non-zero for an unsigned APK; the certificate
+            # line reads "Signer #1 certificate DN:" or "V2 Signer:
+            # certificate DN:" depending on the build-tools version.
             apksigner=$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)apksigner
             certs=$("$apksigner" verify --print-certs "$apk")
             echo "$certs"
-            if ! grep -q 'Signer #1' <<<"$certs" || grep -q 'CN=Android Debug' <<<"$certs"; then
+            if ! grep -q 'certificate DN:' <<<"$certs" || grep -q 'CN=Android Debug' <<<"$certs"; then
               echo "::error::$apk is not signed with the release key"
               exit 1
             fi
