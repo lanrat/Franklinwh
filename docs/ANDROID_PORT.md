@@ -213,11 +213,12 @@ Add an `android` job to `.github/workflows/build.yml` that runs after `test`:
 Developers get the same steps through a `make android` target or a
 `scripts/build-aar.sh` script. The `.aar` is listed in `.gitignore`.
 
-`golang.org/x/mobile` is pinned in `go.mod` with `tool` directives, at the last
-commit that still supports Go 1.24. `scripts/build-aar.sh` installs gomobile
-and gobind from those versions; don't run `gomobile init`, which installs
-`gobind@latest`. The `android` CI job builds the AAR and then the APK. Only
-the APK is published; the AAR is just an intermediate build step.
+`golang.org/x/mobile` is pinned in `go.mod` with `tool` directives, and CI
+builds with the newest stable Go release (`go.mod`'s `go` line is only the
+minimum). `scripts/build-aar.sh` installs gomobile and gobind from the pinned
+versions; don't run `gomobile init`, which installs `gobind@latest`. The
+`android` CI job builds the AAR and then the APK. Only the APK is published;
+the AAR is just an intermediate build step.
 
 ## 5. Phased plan
 

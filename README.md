@@ -37,7 +37,7 @@ go install github.com/lanrat/franklinwh/cmd/franklinwh@latest
 go get github.com/lanrat/franklinwh
 ```
 
-Requires Go 1.24+. Pre-built Linux and Windows x64 binaries are attached to
+Requires Go 1.26+. Pre-built Linux and Windows x64 binaries are attached to
 each [release](https://github.com/lanrat/franklinwh/releases).
 
 **Android:** download `franklinwh-android.apk` from the latest

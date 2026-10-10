@@ -29,7 +29,10 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
         with:
-          go-version-file: go.mod
+          # Build with the newest Go release so binaries get every security
+          # fix; go.mod's "go" line is only the minimum for library users.
+          go-version: stable
+          check-latest: true
           cache: true
       - run: go vet ./...
       - run: go test ./...
@@ -53,7 +56,10 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
         with:
-          go-version-file: go.mod
+          # Build with the newest Go release so binaries get every security
+          # fix; go.mod's "go" line is only the minimum for library users.
+          go-version: stable
+          check-latest: true
           cache: true
       - name: Build
         env:
@@ -98,7 +104,10 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
         with:
-          go-version-file: go.mod
+          # Build with the newest Go release so binaries get every security
+          # fix; go.mod's "go" line is only the minimum for library users.
+          go-version: stable
+          check-latest: true
           cache: true
       - uses: actions/setup-java@v5
         with:
