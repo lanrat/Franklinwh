@@ -23,11 +23,11 @@ val appVersionCode = appVersionName.split(".").map { it.toInt() }.let { (major, 
 }
 
 android {
-    namespace = "com.github.lanrat.franklinwh.app"
+    namespace = "com.vorsk.franklinwh.app"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.github.lanrat.franklinwh.app"
+        applicationId = "com.vorsk.franklinwh.app"
         minSdk = 33 // Android 13; matches -androidapi in scripts/build-aar.sh
         targetSdk = 35
         versionCode = appVersionCode

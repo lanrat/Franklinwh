@@ -1,4 +1,4 @@
-package com.github.lanrat.franklinwh.app
+package com.vorsk.franklinwh.app
 
 import android.annotation.SuppressLint
 import android.app.Activity
