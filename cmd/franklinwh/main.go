@@ -44,6 +44,7 @@ import (
 
 	"github.com/lanrat/franklinwh"
 	"github.com/lanrat/franklinwh/internal/gui"
+	"github.com/lanrat/franklinwh/internal/version"
 	"golang.org/x/term"
 )
 
@@ -87,6 +88,7 @@ Global flags:
   -timeout duration  overall timeout (default 45s)
   -addr string       gui: address to listen on (default 127.0.0.1:0)
   -no-browser        gui: do not open a browser automatically
+  -version           print the version and exit
 
 Environment variables are used when the matching flag is not set.
 `)
@@ -106,9 +108,14 @@ func run(args []string) error {
 		timeout   = fs.Duration("timeout", 45*time.Second, "overall timeout")
 		addr      = fs.String("addr", "127.0.0.1:0", "gui: address to listen on")
 		noBrowser = fs.Bool("no-browser", false, "gui: do not open a browser")
+		showVer   = fs.Bool("version", false, "print the version and exit")
 	)
 	if err := fs.Parse(args); err != nil {
 		return err
+	}
+	if *showVer {
+		fmt.Println("franklinwh", version.Get())
+		return nil
 	}
 	// With no command (e.g. a double-click on Windows) open the GUI.
 	cmd := "gui"

@@ -1,11 +1,15 @@
 package gui
 
 import (
+	"encoding/json"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 )
 
 func startServer(t *testing.T, cfg Config) (*Server, string) {
@@ -73,5 +77,49 @@ func TestEmbedded(t *testing.T) {
 		if !strings.Contains(body, want) {
 			t.Errorf("embedded=%v: page lacks %s", embedded, want)
 		}
+	}
+}
+
+func TestVersionAndUpdateCheck(t *testing.T) {
+	var hits atomic.Int32
+	gh := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		io.WriteString(w, `{"tag_name":"v0.3.0","html_url":"https://github.com/lanrat/franklinwh/releases/tag/v0.3.0"}`)
+	}))
+	defer gh.Close()
+
+	versionInfo := func(cfg Config) map[string]any {
+		s, pageURL := startServer(t, cfg)
+		u, _ := url.Parse(pageURL)
+		var got map[string]any
+		for i := 0; i < 50; i++ { // the check runs in the background
+			_, body := get(t, "http://"+u.Host+"/api/version", map[string]string{"X-UI-Token": s.uiToken})
+			got = nil
+			json.Unmarshal([]byte(body), &got)
+			if got["updateAvailable"] == true || !strings.HasPrefix(cfg.Version, "v0.2") {
+				break
+			}
+			time.Sleep(20 * time.Millisecond)
+		}
+		return got
+	}
+
+	got := versionInfo(Config{Version: "v0.2.2", UpdateURL: gh.URL})
+	if got["version"] != "v0.2.2" || got["updateAvailable"] != true || got["latest"] != "v0.3.0" ||
+		got["url"] != "https://github.com/lanrat/franklinwh/releases/tag/v0.3.0" {
+		t.Errorf("older release: %v", got)
+	}
+
+	got = versionInfo(Config{Version: "v0.3.0", UpdateURL: gh.URL})
+	time.Sleep(100 * time.Millisecond)
+	if got["version"] != "v0.3.0" || got["updateAvailable"] != nil {
+		t.Errorf("current release: %v", got)
+	}
+
+	before := hits.Load()
+	got = versionInfo(Config{Version: "dev", UpdateURL: gh.URL})
+	time.Sleep(100 * time.Millisecond)
+	if got["version"] != "dev" || got["updateAvailable"] != nil || hits.Load() != before {
+		t.Errorf("dev build: %v, GitHub hits %d -> %d", got, before, hits.Load())
 	}
 }

@@ -63,7 +63,11 @@ franklinwh            # opens http://127.0.0.1:<port>/ in your browser
   listen address, `-no-browser` to not auto-open one.
 
 The GUI makes the API calls from Go, so there is no browser CORS issue and
-nothing is sent anywhere except FranklinWH's own servers.
+your data goes nowhere except FranklinWH's own servers. Release builds also
+ask GitHub's API once a day whether a newer release is out; if so, the
+footer shows an **Update available** link to its release page. That request
+carries no account or system data, only the app's version in its user agent
+(and, like any web request, your IP address).
 
 ## Command-line usage
 
@@ -88,6 +92,9 @@ franklinwh -email you@example.com login
 
 # Forget the saved session
 franklinwh logout
+
+# Print the version
+franklinwh -version
 
 # List your gateways
 franklinwh gateways

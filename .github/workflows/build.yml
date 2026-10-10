@@ -37,6 +37,9 @@ jobs:
   build:
     needs: test
     runs-on: ubuntu-latest
+    env:
+      # A release: a version tag push, or "Run workflow" with a version.
+      RELEASE_VERSION: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || (github.event_name == 'workflow_dispatch' && inputs.version || '') }}
     strategy:
       matrix:
         include:
@@ -61,6 +64,11 @@ jobs:
           mkdir -p dist
           out="dist/franklinwh-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}"
           ldflags="-s -w"
+          # Stamp the release version (shown by -version and in the dashboard,
+          # which uses it to check for newer releases).
+          if [ -n "$RELEASE_VERSION" ]; then
+            ldflags="$ldflags -X github.com/lanrat/franklinwh/internal/version.version=$RELEASE_VERSION"
+          fi
           # Link the Windows binary for the GUI subsystem so double-clicking it
           # opens the dashboard without a console window flashing up.
           if [ "${{ matrix.goos }}" = "windows" ]; then
@@ -97,6 +105,8 @@ jobs:
           distribution: temurin
           java-version: '17'
       - name: Build AAR
+        env:
+          VERSION: ${{ env.RELEASE_VERSION }}
         run: scripts/build-aar.sh
       - name: Build debug APK
         if: env.RELEASE_VERSION == ''

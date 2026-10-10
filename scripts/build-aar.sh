@@ -8,7 +8,9 @@
 #
 # It builds for arm64 only, which covers the supported phones (Pixel 7 and
 # newer are 64-bit ARM only). Set TARGETS to add others, e.g.
-# TARGETS=android/arm64,android/amd64 for an x86_64 emulator.
+# TARGETS=android/arm64,android/amd64 for an x86_64 emulator. Set VERSION
+# (e.g. v1.2.3) to stamp a release version; the dashboard shows it and checks
+# GitHub for newer releases.
 #
 # gomobile and gobind are built from the versions pinned in go.mod, so local
 # and CI builds match. ("gomobile init" is not needed, and would install the
@@ -19,6 +21,10 @@ root=$(cd "$(dirname "$0")/.." && pwd)
 out=${1:-$root/android/app/libs/franklinwh.aar}
 targets=${TARGETS:-android/arm64}
 androidapi=${ANDROID_API:-33}
+ldflags="-s -w"
+if [ -n "${VERSION:-}" ]; then
+	ldflags="$ldflags -X github.com/lanrat/franklinwh/internal/version.version=$VERSION"
+fi
 
 cd "$root"
 bin=$(mktemp -d)
@@ -32,7 +38,7 @@ gomobile bind \
 	-androidapi="$androidapi" \
 	-javapkg=com.github.lanrat.franklinwh \
 	-trimpath \
-	-ldflags="-s -w" \
+	-ldflags="$ldflags" \
 	-o "$out" \
 	./mobile
 echo "built $out"

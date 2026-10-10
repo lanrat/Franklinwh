@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/lanrat/franklinwh"
+	"github.com/lanrat/franklinwh/internal/version"
 )
 
 //go:embed web/index.html
@@ -39,7 +40,18 @@ type Config struct {
 	// Embedded hides the page's Quit button, for hosts such as the Android
 	// app that own the server's lifetime.
 	Embedded bool
+	// Version is shown in the page footer; "" means version.Get(). Only a
+	// release version (v1.2.3) is checked against UpdateURL for a newer
+	// release, so development builds never check.
+	Version string
+	// UpdateURL is the GitHub latest-release API endpoint; "" means
+	// version.LatestReleaseURL.
+	UpdateURL string
 }
+
+// updateCheckInterval is how often a running server looks for a newer
+// release (it also checks at startup).
+const updateCheckInterval = 24 * time.Hour
 
 // Server serves the dashboard and proxies to the FranklinWH API.
 type Server struct {
@@ -53,6 +65,7 @@ type Server struct {
 
 	srv          *http.Server
 	url          string
+	latest       version.Release // newest release seen; guarded by mu
 	shutdownOnce sync.Once
 	done         chan struct{}
 }
@@ -65,6 +78,12 @@ func New(cfg Config) (*Server, error) {
 	}
 	if cfg.Addr == "" {
 		cfg.Addr = "127.0.0.1:0"
+	}
+	if cfg.Version == "" {
+		cfg.Version = version.Get()
+	}
+	if cfg.UpdateURL == "" {
+		cfg.UpdateURL = version.LatestReleaseURL
 	}
 	if cfg.Session.ClientID == "" {
 		// A stable client ID lets MFA's "remember this device" take effect.
@@ -113,7 +132,39 @@ func (s *Server) Start() (string, error) {
 			s.quit()
 		}
 	}()
+	if version.IsRelease(s.cfg.Version) {
+		go s.checkForUpdates()
+	}
 	return s.url, nil
+}
+
+// checkForUpdates looks up the newest release now and then every
+// updateCheckInterval until the server stops. Failures (offline, rate
+// limited) are ignored; the page just shows no update notice.
+func (s *Server) checkForUpdates() {
+	t := time.NewTicker(updateCheckInterval)
+	defer t.Stop()
+	for {
+		ctx, cancel := context.WithCancel(context.Background())
+		go func() {
+			select {
+			case <-s.done:
+				cancel()
+			case <-ctx.Done():
+			}
+		}()
+		if r, err := version.Latest(ctx, s.cfg.UpdateURL); err == nil {
+			s.mu.Lock()
+			s.latest = r
+			s.mu.Unlock()
+		}
+		cancel()
+		select {
+		case <-s.done:
+			return
+		case <-t.C:
+		}
+	}
 }
 
 // URL returns the page's URL once Start has succeeded.
@@ -146,6 +197,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("/api/status", s.guard(s.handleStatus))
 	mux.HandleFunc("/api/grid", s.guard(s.handleGrid))
 	mux.HandleFunc("/api/ping", s.guard(s.handlePing))
+	mux.HandleFunc("/api/version", s.guard(s.handleVersion))
 	mux.HandleFunc("/api/quit", s.guard(s.handleQuit))
 	return mux
 }
@@ -359,6 +411,21 @@ func gridViewOf(id string, l *franklinwh.GridLimits) gridView {
 		ExportKW:      l.ExportKW,
 		ExportLimited: l.ExportFlag == franklinwh.GridLimitLimited,
 	}
+}
+
+// handleVersion reports this build's version and, when a newer release is
+// out, its version and page.
+func (s *Server) handleVersion(w http.ResponseWriter, r *http.Request) {
+	s.mu.Lock()
+	latest := s.latest
+	s.mu.Unlock()
+	out := map[string]any{"version": s.cfg.Version}
+	if version.Newer(s.cfg.Version, latest.Version) {
+		out["updateAvailable"] = true
+		out["latest"] = latest.Version
+		out["url"] = latest.URL
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 func (s *Server) handlePing(w http.ResponseWriter, r *http.Request) {

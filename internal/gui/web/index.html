@@ -40,6 +40,7 @@
     padding: 14px 16px 18px; text-align: center; font-size: 13px; color: var(--muted);
     border-top: 1px solid var(--border);
   }
+  footer a.update { color: var(--accent); font-weight: 600; }
   .hidden { display: none !important; }
   button {
     font: inherit; cursor: pointer; border: 1px solid var(--border);
@@ -142,8 +143,10 @@
 </main>
 
 <footer>
-  Unofficial FranklinWH dashboard ·
+  Unofficial FranklinWH dashboard<span id="appVersion"></span> ·
   <a href="https://github.com/lanrat/franklinwh" target="_blank" rel="noopener noreferrer">Source on GitHub</a>
+  <span id="updateNotice" class="hidden"> ·
+    <a id="updateLink" class="update" target="_blank" rel="noopener noreferrer"></a></span>
 </footer>
 
 <div id="toast"></div>
@@ -399,6 +402,20 @@ async function quit() {
     + 'The FranklinWH dashboard has stopped. You can close this tab.</div></main>';
 }
 
+// showVersion puts this build's version in the footer and, when the server
+// found a newer release, a link to its page.
+async function showVersion() {
+  try {
+    const v = await api("/api/version");
+    $("appVersion").textContent = v.version ? " " + v.version : "";
+    if (v.updateAvailable) {
+      $("updateLink").textContent = "Update available: " + v.latest;
+      $("updateLink").href = v.url;
+      $("updateNotice").classList.remove("hidden");
+    }
+  } catch (e) {}
+}
+
 function startHeartbeat() {
   setInterval(() => { api("/api/ping", { method: "POST" }).catch(() => {}); }, 5000);
 }
@@ -426,6 +443,8 @@ window.addEventListener("load", async () => {
   });
 
   startHeartbeat();
+  showVersion();
+  setInterval(showVersion, 6 * 60 * 60 * 1000); // the server re-checks daily
   // Decide the initial view: the dashboard if a session is saved.
   try {
     const sess = await api("/api/session");
