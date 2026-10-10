@@ -230,3 +230,9 @@ the one-time setup. Without it, releases fail.
 
 Provided as-is for interoperability with hardware you own. Names and trademarks
 belong to their respective owners. Review FranklinWH's terms before use.
+
+This project is 100% vibe-coded: the code, docs and Android app were written
+by an AI coding assistant (Claude) from plain-language requests, with a human
+steering, testing on real hardware and deciding what ships, but not reviewing
+every line. Treat it accordingly, especially before changing settings such as
+the grid import/export limits.
