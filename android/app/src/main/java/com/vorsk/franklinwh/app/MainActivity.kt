@@ -44,19 +44,22 @@ class MainActivity : Activity() {
         // is padded to keep the page clear of the status and navigation bars
         // and the keyboard (Android 15 draws apps edge to edge). The
         // container shows through behind the bars, so it matches the page's
-        // white header; the page is always light because the app theme is.
+        // header, which follows the system light/dark setting like the app
+        // theme does. A theme change recreates the activity (uiMode is not in
+        // configChanges), so this is re-evaluated.
+        val dark = resources.configuration.isNightModeActive
         val root = FrameLayout(this)
-        root.setBackgroundColor(Color.WHITE)
+        root.setBackgroundColor(if (dark) HEADER_DARK else Color.WHITE)
         root.addView(web, ViewGroup.LayoutParams(MATCH_PARENT, MATCH_PARENT))
         root.setOnApplyWindowInsetsListener { v, insets ->
             val bars = insets.getInsets(WindowInsets.Type.systemBars() or WindowInsets.Type.ime())
             v.setPadding(bars.left, bars.top, bars.right, bars.bottom)
             WindowInsets.CONSUMED
         }
-        // Dark status and navigation bar icons on the white background.
+        // Dark bar icons on the light header, light icons on the dark one.
         val light = WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or
             WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS
-        window.insetsController?.setSystemBarsAppearance(light, light)
+        window.insetsController?.setSystemBarsAppearance(if (dark) 0 else light, light)
         setContentView(root)
 
         val deviceName = Settings.Global.getString(contentResolver, Settings.Global.DEVICE_NAME) ?: ""
@@ -92,5 +95,10 @@ class MainActivity : Activity() {
     override fun onDestroy() {
         web.destroy()
         super.onDestroy()
+    }
+
+    private companion object {
+        /** The page header's dark-theme color (--panel in index.html). */
+        const val HEADER_DARK = 0xFF202329.toInt()
     }
 }

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Follows the system light/dark setting. The WebView reports the
+         theme to the page (prefers-color-scheme), which has dark styles. -->
+    <style name="AppTheme" parent="android:Theme.DeviceDefault.DayNight">
+        <item name="android:windowActionBar">false</item>
+        <item name="android:windowNoTitle">true</item>
+    </style>
+</resources>
