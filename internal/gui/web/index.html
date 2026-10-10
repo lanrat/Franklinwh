@@ -33,7 +33,13 @@
   }
   header h1 { font-size: 18px; margin: 0; font-weight: 650; }
   header .spacer { flex: 1; }
-  main { max-width: 860px; margin: 0 auto; padding: 20px 16px 60px; }
+  /* Full-height column so the footer sits at the bottom of short pages. */
+  body { display: flex; flex-direction: column; min-height: 100vh; }
+  main { flex: 1; width: 100%; max-width: 860px; margin: 0 auto; padding: 20px 16px 32px; }
+  footer {
+    padding: 14px 16px 18px; text-align: center; font-size: 13px; color: var(--muted);
+    border-top: 1px solid var(--border);
+  }
   .hidden { display: none !important; }
   button {
     font: inherit; cursor: pointer; border: 1px solid var(--border);
@@ -134,6 +140,11 @@
     </div>
   </section>
 </main>
+
+<footer>
+  Unofficial FranklinWH dashboard ·
+  <a href="https://github.com/lanrat/franklinwh" target="_blank" rel="noopener noreferrer">Source on GitHub</a>
+</footer>
 
 <div id="toast"></div>
 
