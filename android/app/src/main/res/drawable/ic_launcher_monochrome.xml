@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Single-color version of the launcher icon for themed icons (Android 13+);
+     the launcher tints it. The track is faint so the ring still reads as a
+     gauge. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:pathData="M54,30a24,24 0,1 1,0 48a24,24 0,1 1,0 -48"
+        android:strokeAlpha="0.35"
+        android:strokeWidth="7"
+        android:strokeColor="#000000" />
+    <path
+        android:pathData="M54,30a24,24 0,1 1,-24 24"
+        android:strokeWidth="7"
+        android:strokeColor="#000000"
+        android:strokeLineCap="round" />
+    <path
+        android:fillColor="#000000"
+        android:pathData="M57,41L46,57h7l-3,11 11,-16h-7l3,-11z" />
+</vector>

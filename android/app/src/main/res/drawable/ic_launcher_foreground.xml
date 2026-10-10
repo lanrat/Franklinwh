@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Launcher icon: a state-of-charge ring around a bolt. 108dp adaptive-icon
+     canvas; the artwork stays inside the central 66dp safe circle. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- ring track -->
+    <path
+        android:pathData="M54,30a24,24 0,1 1,0 48a24,24 0,1 1,0 -48"
+        android:strokeWidth="7"
+        android:strokeColor="#30343B" />
+    <!-- charge, three quarters of the way round -->
+    <path
+        android:pathData="M54,30a24,24 0,1 1,-24 24"
+        android:strokeWidth="7"
+        android:strokeColor="#4CAF7D"
+        android:strokeLineCap="round" />
+    <!-- bolt -->
+    <path
+        android:fillColor="#E8C252"
+        android:pathData="M57,41L46,57h7l-3,11 11,-16h-7l3,-11z" />
+</vector>

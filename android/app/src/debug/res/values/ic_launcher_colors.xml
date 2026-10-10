@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Debug builds get a dark red icon so they stand out from the release. -->
+    <color name="ic_launcher_background">#5A1E1E</color>
+</resources>
